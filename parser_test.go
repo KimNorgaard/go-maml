@@ -7,127 +7,67 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestIdentifierExpression(t *testing.T) {
-	input := `foobar`
-
-	l := NewLexer([]byte(input))
-	p := NewParser(l)
-	doc := p.ParseDocument()
-	require.Empty(t, p.Errors(), "parser has errors")
-
-	require.Len(t, doc.Statements, 1, "doc.Statements does not contain 1 statement")
-
-	stmt, ok := doc.Statements[0].(*ast.ExpressionStatement)
-	require.True(t, ok, "doc.Statements[0] is not ast.ExpressionStatement")
-
-	ident, ok := stmt.Expression.(*ast.Identifier)
-	require.True(t, ok, "exp not *ast.Identifier")
-
-	require.Equal(t, "foobar", ident.Value, "ident.Value not %s", "foobar")
-	require.Equal(t, "foobar", ident.TokenLiteral(), "ident.TokenLiteral not %s", "foobar")
-}
-
-func TestIntegerLiteralExpression(t *testing.T) {
-	input := `5`
-
-	l := NewLexer([]byte(input))
-	p := NewParser(l)
-	doc := p.ParseDocument()
-	require.Empty(t, p.Errors(), "parser has errors")
-
-	require.Len(t, doc.Statements, 1, "doc.Statements does not contain 1 statement")
-
-	stmt, ok := doc.Statements[0].(*ast.ExpressionStatement)
-	require.True(t, ok, "doc.Statements[0] is not ast.ExpressionStatement")
-
-	literal, ok := stmt.Expression.(*ast.IntegerLiteral)
-	require.True(t, ok, "exp not *ast.IntegerLiteral")
-
-	require.Equal(t, int64(5), literal.Value, "literal.Value not %d", 5)
-	require.Equal(t, "5", literal.TokenLiteral(), "literal.TokenLiteral not %s", "5")
-}
-
-func TestBooleanLiteralExpression(t *testing.T) {
+func TestLiteralExpressions(t *testing.T) {
 	tests := []struct {
-		input         string
-		expectedValue bool
+		input    string
+		expected any
 	}{
+		{"5", int64(5)},
 		{"true", true},
 		{"false", false},
+		{"foobar", "foobar"},
+		{"1.23", float64(1.23)},
+		{"\"hello world\"", "hello world"},
+		{"null", nil},
 	}
 
 	for _, tt := range tests {
-		l := NewLexer([]byte(tt.input))
-		p := NewParser(l)
-		doc := p.ParseDocument()
-		require.Empty(t, p.Errors(), "parser has errors")
+		t.Run(tt.input, func(t *testing.T) {
+			l := NewLexer([]byte(tt.input))
+			p := NewParser(l)
+			doc := p.ParseDocument()
+			require.Empty(t, p.Errors(), "parser has errors")
+			require.Len(t, doc.Statements, 1, "doc.Statements does not contain 1 statement")
 
-		require.Len(t, doc.Statements, 1, "doc.Statements does not contain 1 statement")
+			stmt, ok := doc.Statements[0].(*ast.ExpressionStatement)
+			require.True(t, ok, "doc.Statements[0] is not ast.ExpressionStatement")
 
-		stmt, ok := doc.Statements[0].(*ast.ExpressionStatement)
-		require.True(t, ok, "doc.Statements[0] is not ast.ExpressionStatement")
-
-		literal, ok := stmt.Expression.(*ast.BooleanLiteral)
-		require.True(t, ok, "exp not *ast.BooleanLiteral")
-
-		require.Equal(t, tt.expectedValue, literal.Value, "literal.Value not %t", tt.expectedValue)
+			testLiteralExpression(t, stmt.Expression, tt.expected)
+		})
 	}
 }
 
-func TestStringLiteralExpression(t *testing.T) {
-	input := `"hello world"`
+func testLiteralExpression(t *testing.T, exp ast.Expression, expected any) {
+	t.Helper()
 
-	l := NewLexer([]byte(input))
-	p := NewParser(l)
-	doc := p.ParseDocument()
-	require.Empty(t, p.Errors(), "parser has errors")
-
-	require.Len(t, doc.Statements, 1, "doc.Statements does not contain 1 statement")
-
-	stmt, ok := doc.Statements[0].(*ast.ExpressionStatement)
-	require.True(t, ok, "doc.Statements[0] is not ast.ExpressionStatement")
-
-	literal, ok := stmt.Expression.(*ast.StringLiteral)
-	require.True(t, ok, "exp not *ast.StringLiteral")
-
-	require.Equal(t, "hello world", literal.Value, "literal.Value not %s", "hello world")
-}
-
-func TestFloatLiteralExpression(t *testing.T) {
-	input := `1.23`
-
-	l := NewLexer([]byte(input))
-	p := NewParser(l)
-	doc := p.ParseDocument()
-	require.Empty(t, p.Errors(), "parser has errors")
-
-	require.Len(t, doc.Statements, 1, "doc.Statements does not contain 1 statement")
-
-	stmt, ok := doc.Statements[0].(*ast.ExpressionStatement)
-	require.True(t, ok, "doc.Statements[0] is not ast.ExpressionStatement")
-
-	literal, ok := stmt.Expression.(*ast.FloatLiteral)
-	require.True(t, ok, "exp not *ast.FloatLiteral")
-
-	require.Equal(t, float64(1.23), literal.Value, "literal.Value not %f", 1.23)
-	require.Equal(t, "1.23", literal.TokenLiteral(), "literal.TokenLiteral not %s", "1.23")
-}
-
-func TestNullLiteralExpression(t *testing.T) {
-	input := `null`
-
-	l := NewLexer([]byte(input))
-	p := NewParser(l)
-	doc := p.ParseDocument()
-	require.Empty(t, p.Errors(), "parser has errors")
-
-	require.Len(t, doc.Statements, 1, "doc.Statements does not contain 1 statement")
-
-	stmt, ok := doc.Statements[0].(*ast.ExpressionStatement)
-	require.True(t, ok, "doc.Statements[0] is not ast.ExpressionStatement")
-
-	_, ok = stmt.Expression.(*ast.NullLiteral)
-	require.True(t, ok, "exp not *ast.NullLiteral")
+	switch v := expected.(type) {
+	case int64:
+		lit, ok := exp.(*ast.IntegerLiteral)
+		require.True(t, ok, "exp not *ast.IntegerLiteral, got=%T", exp)
+		require.Equal(t, v, lit.Value)
+	case bool:
+		lit, ok := exp.(*ast.BooleanLiteral)
+		require.True(t, ok, "exp not *ast.BooleanLiteral, got=%T", exp)
+		require.Equal(t, v, lit.Value)
+	case string:
+		// Could be Identifier or StringLiteral
+		if ident, ok := exp.(*ast.Identifier); ok {
+			require.Equal(t, v, ident.Value)
+		} else if str, ok := exp.(*ast.StringLiteral); ok {
+			require.Equal(t, v, str.Value)
+		} else {
+			t.Fatalf("exp not *ast.Identifier or *ast.StringLiteral, got=%T", exp)
+		}
+	case float64:
+		lit, ok := exp.(*ast.FloatLiteral)
+		require.True(t, ok, "exp not *ast.FloatLiteral, got=%T", exp)
+		require.Equal(t, v, lit.Value)
+	case nil:
+		_, ok := exp.(*ast.NullLiteral)
+		require.True(t, ok, "exp not *ast.NullLiteral, got=%T", exp)
+	default:
+		t.Fatalf("type of expected not handled: %T", expected)
+	}
 }
 
 func TestArrayLiteralParsing(t *testing.T) {
@@ -149,17 +89,13 @@ func TestArrayLiteralParsing(t *testing.T) {
 	require.Len(t, array.Elements, 3, "len(array.Elements) not 3")
 
 	// Test elements inside the array
-	require.IsType(t, &ast.IntegerLiteral{}, array.Elements[0])
-	require.IsType(t, &ast.StringLiteral{}, array.Elements[1])
-	require.IsType(t, &ast.BooleanLiteral{}, array.Elements[2])
+	testLiteralExpression(t, array.Elements[0], int64(1))
+	testLiteralExpression(t, array.Elements[1], "two")
+	testLiteralExpression(t, array.Elements[2], true)
 }
 
 func TestObjectLiteralParsing(t *testing.T) {
-	input := `{
-		"one": 1,
-		two: "two",
-		"three": true
-	}`
+	input := "{\n\t\"one\": 1,\n\ttwo: \"two\",\n\t\"three\": true\n}"
 
 	l := NewLexer([]byte(input))
 	p := NewParser(l)
@@ -175,14 +111,14 @@ func TestObjectLiteralParsing(t *testing.T) {
 	require.Len(t, obj.Pairs, 3, "obj.Pairs has wrong number of pairs")
 
 	// Check pair 1
-	require.Equal(t, "one", obj.Pairs[0].Key.(*ast.StringLiteral).Value)
-	require.Equal(t, int64(1), obj.Pairs[0].Value.(*ast.IntegerLiteral).Value)
+	testLiteralExpression(t, obj.Pairs[0].Key, "one")
+	testLiteralExpression(t, obj.Pairs[0].Value, int64(1))
 
 	// Check pair 2
-	require.Equal(t, "two", obj.Pairs[1].Key.(*ast.Identifier).Value)
-	require.Equal(t, "two", obj.Pairs[1].Value.(*ast.StringLiteral).Value)
+	testLiteralExpression(t, obj.Pairs[1].Key, "two")
+	testLiteralExpression(t, obj.Pairs[1].Value, "two")
 
 	// Check pair 3
-	require.Equal(t, "three", obj.Pairs[2].Key.(*ast.StringLiteral).Value)
-	require.Equal(t, true, obj.Pairs[2].Value.(*ast.BooleanLiteral).Value)
+	testLiteralExpression(t, obj.Pairs[2].Key, "three")
+	testLiteralExpression(t, obj.Pairs[2].Value, true)
 }

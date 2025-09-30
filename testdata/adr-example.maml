@@ -1,0 +1,13 @@
+{
+  project: "MAML"
+  tags: [
+    "minimal"
+    "readable"
+  ]
+
+  # A simple nested object
+  spec: {
+    version: 1
+    author: "Anton Medvedev"
+  }
+}
