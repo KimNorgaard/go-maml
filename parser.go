@@ -8,10 +8,6 @@ import (
 	"github.com/KimNorgaard/go-maml/token"
 )
 
-type (
-	prefixParseFn func() ast.Expression
-)
-
 // Parser transforms a stream of tokens into an AST.
 type Parser struct {
 	l      *Lexer
@@ -19,32 +15,14 @@ type Parser struct {
 
 	curToken  token.Token
 	peekToken token.Token
-
-	prefixParseFns map[token.TokenType]prefixParseFn
 }
 
 // NewParser creates a new Parser.
 func NewParser(l *Lexer) *Parser {
-	p := &Parser{
-		l:      l,
-		errors: []string{},
-	}
-
-	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
-	p.registerPrefix(token.IDENT, p.parseIdentifier)
-	p.registerPrefix(token.INT, p.parseIntegerLiteral)
-	p.registerPrefix(token.FLOAT, p.parseFloatLiteral)
-	p.registerPrefix(token.TRUE, p.parseBooleanLiteral)
-	p.registerPrefix(token.FALSE, p.parseBooleanLiteral)
-	p.registerPrefix(token.STRING, p.parseStringLiteral)
-	p.registerPrefix(token.NULL, p.parseNullLiteral)
-	p.registerPrefix(token.LBRACK, p.parseArrayLiteral)
-	p.registerPrefix(token.LBRACE, p.parseObjectLiteral)
-
+	p := &Parser{l: l}
 	// Read two tokens, so curToken and peekToken are both set
 	p.nextToken()
 	p.nextToken()
-
 	return p
 }
 
@@ -53,33 +31,35 @@ func (p *Parser) nextToken() {
 	p.peekToken = p.l.NextToken()
 }
 
+func (p *Parser) Errors() []string {
+	return p.errors
+}
+
 // ParseDocument parses the MAML document and returns the root AST node.
 func (p *Parser) ParseDocument() *ast.Document {
 	document := &ast.Document{}
 	document.Statements = []ast.Statement{}
 
-	for p.curToken.Type != token.EOF {
+	for !p.curTokenIs(token.EOF) {
 		stmt := p.parseStatement()
 		if stmt != nil {
 			document.Statements = append(document.Statements, stmt)
 		}
-		p.nextToken()
 	}
-
 	return document
 }
 
 func (p *Parser) parseStatement() ast.Statement {
-	// Skip newlines and commas at the statement level
-	for p.curToken.Type == token.NEWLINE || p.curToken.Type == token.COMMA {
-		p.nextToken()
-	}
+	// Skip trivia like comments and newlines that are not syntactically significant
+	p.skipTrivia()
 
-	if p.curToken.Type == token.EOF {
+	if p.curTokenIs(token.EOF) {
 		return nil
 	}
 
-	return p.parseExpressionStatement()
+	stmt := p.parseExpressionStatement()
+	p.nextToken() // Always advance after a statement
+	return stmt
 }
 
 func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
@@ -89,14 +69,27 @@ func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
 }
 
 func (p *Parser) parseExpression() ast.Expression {
-	prefix := p.prefixParseFns[p.curToken.Type]
-	if prefix == nil {
+	switch p.curToken.Type {
+	case token.IDENT:
+		return p.parseIdentifier()
+	case token.INT:
+		return p.parseIntegerLiteral()
+	case token.FLOAT:
+		return p.parseFloatLiteral()
+	case token.STRING:
+		return p.parseStringLiteral()
+	case token.TRUE, token.FALSE:
+		return p.parseBooleanLiteral()
+	case token.NULL:
+		return p.parseNullLiteral()
+	case token.LBRACK:
+		return p.parseArrayLiteral()
+	case token.LBRACE:
+		return p.parseObjectLiteral()
+	default:
 		p.noPrefixParseFnError(p.curToken.Type)
 		return nil
 	}
-	leftExp := prefix()
-
-	return leftExp
 }
 
 func (p *Parser) parseIdentifier() ast.Expression {
@@ -105,28 +98,24 @@ func (p *Parser) parseIdentifier() ast.Expression {
 
 func (p *Parser) parseIntegerLiteral() ast.Expression {
 	lit := &ast.IntegerLiteral{Token: p.curToken}
-
 	value, err := strconv.ParseInt(p.curToken.Literal, 0, 64)
 	if err != nil {
 		msg := fmt.Sprintf("could not parse %q as integer", p.curToken.Literal)
 		p.errors = append(p.errors, msg)
 		return nil
 	}
-
 	lit.Value = value
 	return lit
 }
 
 func (p *Parser) parseFloatLiteral() ast.Expression {
 	lit := &ast.FloatLiteral{Token: p.curToken}
-
 	value, err := strconv.ParseFloat(p.curToken.Literal, 64)
 	if err != nil {
 		msg := fmt.Sprintf("could not parse %q as float", p.curToken.Literal)
 		p.errors = append(p.errors, msg)
 		return nil
 	}
-
 	lit.Value = value
 	return lit
 }
@@ -144,72 +133,52 @@ func (p *Parser) parseNullLiteral() ast.Expression {
 }
 
 func (p *Parser) parseArrayLiteral() ast.Expression {
-	array := &ast.ArrayLiteral{Token: p.curToken}
-	array.Elements = p.parseExpressionList(token.RBRACK)
+	array := &ast.ArrayLiteral{Token: p.curToken} // current token is '['
+	array.Elements = []ast.Expression{}
+
+	for {
+		p.nextToken()
+		p.skipTrivia()
+		if p.curTokenIs(token.RBRACK) || p.curTokenIs(token.EOF) {
+			break
+		}
+		array.Elements = append(array.Elements, p.parseExpression())
+	}
 	return array
 }
 
 func (p *Parser) parseObjectLiteral() ast.Expression {
-	obj := &ast.ObjectLiteral{Token: p.curToken} // curToken is '{'
+	obj := &ast.ObjectLiteral{Token: p.curToken} // current token is '{'
 	obj.Pairs = []*ast.PairExpression{}
 
-	for !p.peekTokenIs(token.RBRACE) && !p.peekTokenIs(token.EOF) {
+	for {
 		p.nextToken()
-		// Skip separators
-		for p.curToken.Type == token.NEWLINE || p.curToken.Type == token.COMMA {
-			p.nextToken()
-		}
-
-		// If we found the end, break
-		if p.curToken.Type == token.RBRACE {
-			return obj
+		p.skipTrivia()
+		if p.curTokenIs(token.RBRACE) || p.curTokenIs(token.EOF) {
+			break
 		}
 
 		key := p.parseExpression()
+		p.nextToken()
 
-		if !p.expectPeek(token.COLON) {
+		if !p.curTokenIs(token.COLON) {
+			p.peekError(token.COLON)
 			return nil
 		}
+		p.nextToken() // consume colon
+		p.skipTrivia()
 
-		pair := &ast.PairExpression{Token: p.curToken, Key: key}
+		value := p.parseExpression()
 
-		p.nextToken()
-		pair.Value = p.parseExpression()
-
-		obj.Pairs = append(obj.Pairs, pair)
+		obj.Pairs = append(obj.Pairs, &ast.PairExpression{Key: key, Value: value})
 	}
-
-	p.nextToken() // Consume the closing brace
-
 	return obj
 }
 
-func (p *Parser) parseExpressionList(end token.TokenType) []ast.Expression {
-	list := []ast.Expression{}
-
-	if p.peekTokenIs(end) {
+func (p *Parser) skipTrivia() {
+	for p.curToken.Type == token.NEWLINE || p.curToken.Type == token.COMMA || p.curToken.Type == token.COMMENT {
 		p.nextToken()
-		return list
 	}
-
-	p.nextToken()
-	list = append(list, p.parseExpression())
-
-	for p.peekTokenIs(token.COMMA) {
-		p.nextToken()
-		p.nextToken()
-		list = append(list, p.parseExpression())
-	}
-
-	if !p.expectPeek(end) {
-		return nil
-	}
-
-	return list
-}
-
-func (p *Parser) Errors() []string {
-	return p.errors
 }
 
 func (p *Parser) noPrefixParseFnError(t token.TokenType) {
@@ -217,8 +186,8 @@ func (p *Parser) noPrefixParseFnError(t token.TokenType) {
 	p.errors = append(p.errors, msg)
 }
 
-func (p *Parser) registerPrefix(tokenType token.TokenType, fn prefixParseFn) {
-	p.prefixParseFns[tokenType] = fn
+func (p *Parser) curTokenIs(t token.TokenType) bool {
+	return p.curToken.Type == t
 }
 
 func (p *Parser) peekTokenIs(t token.TokenType) bool {
@@ -230,6 +199,11 @@ func (p *Parser) expectPeek(t token.TokenType) bool {
 		p.nextToken()
 		return true
 	}
-	// p.peekError(t)
+	p.peekError(t)
 	return false
+}
+
+func (p *Parser) peekError(t token.TokenType) {
+	msg := fmt.Sprintf("expected next token to be %s, got %s instead", t, p.peekToken.Type)
+	p.errors = append(p.errors, msg)
 }

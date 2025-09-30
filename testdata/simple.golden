@@ -1,5 +1,1 @@
-AST for # A simple object
-{
-  key: "value"
-  number: 123
-}
+{key:"value", number:123}
