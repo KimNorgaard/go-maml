@@ -1,0 +1,5 @@
+AST for # A simple object
+{
+  key: "value"
+  number: 123
+}
