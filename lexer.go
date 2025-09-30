@@ -1,6 +1,10 @@
 package maml
 
-import "github.com/KimNorgaard/go-maml/token"
+import (
+	"bytes"
+
+	"github.com/KimNorgaard/go-maml/token"
+)
 
 // Lexer transforms a MAML source string into a stream of tokens.
 type Lexer struct {
@@ -74,7 +78,12 @@ func (l *Lexer) NextToken() token.Token {
 		return tok
 	case '"':
 		tok.Type = token.STRING
-		tok.Literal = l.readString()
+		if l.peekChar() == '"' && l.peekCharN(2) == '"' {
+			tok.Literal = l.readMultilineString()
+		} else {
+			tok.Literal = l.readString()
+		}
+		return tok
 	case 0:
 		tok.Literal = ""
 		tok.Type = token.EOF
@@ -86,9 +95,13 @@ func (l *Lexer) NextToken() token.Token {
 				tok.Literal = l.readIdentifier()
 				tok.Type = token.LookupIdent(tok.Literal)
 			}
+			tok.Line = l.line
+			tok.Column = l.col
 			return tok
 		} else if isDigit(l.ch) {
 			tok.Type, tok.Literal = l.readNumber()
+			tok.Line = l.line
+			tok.Column = l.col
 			return tok
 		} else {
 			tok.Type = token.ILLEGAL
@@ -108,6 +121,14 @@ func (l *Lexer) peekChar() byte {
 	return l.input[l.readPosition]
 }
 
+// peekCharN looks at the character N positions ahead without advancing.
+func (l *Lexer) peekCharN(n int) byte {
+	if l.readPosition+n-1 >= len(l.input) {
+		return 0
+	}
+	return l.input[l.readPosition+n-1]
+}
+
 func (l *Lexer) skipWhitespace() {
 	for l.ch == ' ' || l.ch == '\t' || l.ch == '\r' {
 		l.readChar()
@@ -123,14 +144,43 @@ func (l *Lexer) readIdentifier() string {
 }
 
 func (l *Lexer) readString() string {
-	position := l.position + 1
-	for {
+	l.readChar() // consume opening '"'
+	position := l.position
+	for l.ch != '"' && l.ch != 0 {
 		l.readChar()
-		if l.ch == '"' || l.ch == 0 {
+	}
+	literal := string(l.input[position:l.position])
+	l.readChar() // consume closing '"'
+	return literal
+}
+
+func (l *Lexer) readMultilineString() string {
+	var out bytes.Buffer
+
+	// Consume the opening """
+	l.readChar()
+	l.readChar()
+	l.readChar()
+
+	// Ignore a newline immediately following the opening delimiter
+	if l.ch == '\n' {
+		l.readChar()
+	}
+
+	for {
+		if l.ch == 0 || (l.ch == '"' && l.peekChar() == '"' && l.peekCharN(2) == '"') {
 			break
 		}
+		out.WriteByte(l.ch)
+		l.readChar()
 	}
-	return string(l.input[position:l.position])
+
+	// Consume the closing """
+	l.readChar()
+	l.readChar()
+	l.readChar()
+
+	return out.String()
 }
 
 func (l *Lexer) readNumber() (token.TokenType, string) {
@@ -149,6 +199,18 @@ func (l *Lexer) readNumber() (token.TokenType, string) {
 			l.readChar()
 		}
 	}
+
+	if l.ch == 'e' || l.ch == 'E' {
+		tokType = token.FLOAT
+		l.readChar()
+		if l.ch == '+' || l.ch == '-' {
+			l.readChar()
+		}
+		for isDigit(l.ch) {
+			l.readChar()
+		}
+	}
+
 	return tokType, string(l.input[position:l.position])
 }
 

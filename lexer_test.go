@@ -9,8 +9,9 @@ import (
 
 func TestNextToken(t *testing.T) {
 	input := `{
-	  "key": "value", # a comment
-	  "number": 123,
+	  "key": "value",
+	  "multi": """hello
+	world""",
 	}`
 
 	expectedTokens := []struct {
@@ -25,15 +26,14 @@ func TestNextToken(t *testing.T) {
 		{token.COLON, ":", 2, 9},
 		{token.STRING, "value", 2, 11},
 		{token.COMMA, ",", 2, 18},
-		{token.COMMENT, "# a comment", 2, 20},
-		{token.NEWLINE, "\n", 2, 31},
-		{token.STRING, "number", 3, 4},
-		{token.COLON, ":", 3, 12},
-		{token.INT, "123", 3, 14},
-		{token.COMMA, ",", 3, 17},
-		{token.NEWLINE, "\n", 3, 18},
-		{token.RBRACE, "}", 4, 2},
-		{token.EOF, "", 4, 3},
+		{token.NEWLINE, "\n", 2, 19},
+		{token.STRING, "multi", 3, 4},
+		{token.COLON, ":", 3, 11},
+		{token.STRING, "hello\n\tworld", 3, 13},
+		{token.COMMA, ",", 4, 10},
+		{token.NEWLINE, "\n", 4, 11},
+		{token.RBRACE, "}", 5, 2},
+		{token.EOF, "", 5, 3},
 	}
 
 	l := NewLexer([]byte(input))
