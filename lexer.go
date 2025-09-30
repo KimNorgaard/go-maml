@@ -8,17 +8,24 @@ type Lexer struct {
 	position     int  // current position in input (points to current char)
 	readPosition int  // current reading position in input (after current char)
 	ch           byte // current char under examination
+	line         int  // current line number
+	col          int  // current column number
 }
 
 // NewLexer creates a new Lexer.
 func NewLexer(input []byte) *Lexer {
-	l := &Lexer{input: input}
+	l := &Lexer{input: input, line: 1, col: 0}
 	l.readChar()
 	return l
 }
 
 // readChar gives us the next character and advances our position in the input string.
 func (l *Lexer) readChar() {
+	if l.ch == '\n' {
+		l.line++
+		l.col = 0
+	}
+
 	if l.readPosition >= len(l.input) {
 		l.ch = 0 // NUL character, signifies EOF
 	} else {
@@ -26,14 +33,7 @@ func (l *Lexer) readChar() {
 	}
 	l.position = l.readPosition
 	l.readPosition++
-}
-
-// peekChar looks at the next character without advancing the position.
-func (l *Lexer) peekChar() byte {
-	if l.readPosition >= len(l.input) {
-		return 0
-	}
-	return l.input[l.readPosition]
+	l.col++
 }
 
 // NextToken returns the next token from the input.
@@ -42,21 +42,32 @@ func (l *Lexer) NextToken() token.Token {
 
 	l.skipWhitespace()
 
+	// Record the starting position of the token
+	tok.Line = l.line
+	tok.Column = l.col
+
 	switch l.ch {
 	case '{':
-		tok = newToken(token.LBRACE, l.ch)
+		tok.Type = token.LBRACE
+		tok.Literal = string(l.ch)
 	case '}':
-		tok = newToken(token.RBRACE, l.ch)
+		tok.Type = token.RBRACE
+		tok.Literal = string(l.ch)
 	case '[':
-		tok = newToken(token.LBRACK, l.ch)
+		tok.Type = token.LBRACK
+		tok.Literal = string(l.ch)
 	case ']':
-		tok = newToken(token.RBRACK, l.ch)
+		tok.Type = token.RBRACK
+		tok.Literal = string(l.ch)
 	case ',':
-		tok = newToken(token.COMMA, l.ch)
+		tok.Type = token.COMMA
+		tok.Literal = string(l.ch)
 	case ':':
-		tok = newToken(token.COLON, l.ch)
+		tok.Type = token.COLON
+		tok.Literal = string(l.ch)
 	case '\n':
-		tok = newToken(token.NEWLINE, l.ch)
+		tok.Type = token.NEWLINE
+		tok.Literal = string(l.ch)
 	case '#':
 		tok.Type = token.COMMENT
 		tok.Literal = l.readComment()
@@ -69,24 +80,32 @@ func (l *Lexer) NextToken() token.Token {
 		tok.Type = token.EOF
 	default:
 		if isLetter(l.ch) {
-			// If it starts with a hyphen, check if it's a number.
 			if l.ch == '-' && isDigit(l.peekChar()) {
 				tok.Type, tok.Literal = l.readNumber()
-				return tok
+			} else {
+				tok.Literal = l.readIdentifier()
+				tok.Type = token.LookupIdent(tok.Literal)
 			}
-			tok.Literal = l.readIdentifier()
-			tok.Type = token.LookupIdent(tok.Literal)
 			return tok
 		} else if isDigit(l.ch) {
 			tok.Type, tok.Literal = l.readNumber()
 			return tok
 		} else {
-			tok = newToken(token.ILLEGAL, l.ch)
+			tok.Type = token.ILLEGAL
+			tok.Literal = string(l.ch)
 		}
 	}
 
 	l.readChar()
 	return tok
+}
+
+// peekChar looks at the next character without advancing the position.
+func (l *Lexer) peekChar() byte {
+	if l.readPosition >= len(l.input) {
+		return 0
+	}
+	return l.input[l.readPosition]
 }
 
 func (l *Lexer) skipWhitespace() {
@@ -147,8 +166,4 @@ func isLetter(ch byte) bool {
 
 func isDigit(ch byte) bool {
 	return '0' <= ch && ch <= '9'
-}
-
-func newToken(tokenType token.TokenType, ch byte) token.Token {
-	return token.Token{Type: tokenType, Literal: string(ch)}
 }
