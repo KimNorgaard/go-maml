@@ -138,7 +138,7 @@ func (al *ArrayLiteral) String() string {
 // ObjectLiteral represents an object literal.
 type ObjectLiteral struct {
 	Token token.Token // the '{' token
-	Pairs map[Expression]Expression
+	Pairs []*PairExpression
 }
 
 func (ol *ObjectLiteral) expressionNode()      {}
@@ -146,13 +146,26 @@ func (ol *ObjectLiteral) TokenLiteral() string { return ol.Token.Literal }
 func (ol *ObjectLiteral) String() string {
 	var out bytes.Buffer
 	pairs := []string{}
-	for key, value := range ol.Pairs {
-		pairs = append(pairs, key.String()+":"+value.String())
+	for _, p := range ol.Pairs {
+		pairs = append(pairs, p.String())
 	}
 	out.WriteString("{")
 	out.WriteString(strings.Join(pairs, ", "))
 	out.WriteString("}")
 	return out.String()
+}
+
+// PairExpression represents a key-value pair in an object literal.
+type PairExpression struct {
+	Token token.Token // The ':' token
+	Key   Expression
+	Value Expression
+}
+
+func (pe *PairExpression) expressionNode()      {}
+func (pe *PairExpression) TokenLiteral() string { return pe.Token.Literal }
+func (pe *PairExpression) String() string {
+	return pe.Key.String() + ":" + pe.Value.String()
 }
 
 // NullLiteral represents a null literal.

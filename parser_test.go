@@ -129,3 +129,60 @@ func TestNullLiteralExpression(t *testing.T) {
 	_, ok = stmt.Expression.(*ast.NullLiteral)
 	require.True(t, ok, "exp not *ast.NullLiteral")
 }
+
+func TestArrayLiteralParsing(t *testing.T) {
+	input := `[1, "two", true]`
+
+	l := NewLexer([]byte(input))
+	p := NewParser(l)
+	doc := p.ParseDocument()
+	require.Empty(t, p.Errors(), "parser has errors")
+
+	require.Len(t, doc.Statements, 1, "doc.Statements does not contain 1 statement")
+
+	stmt, ok := doc.Statements[0].(*ast.ExpressionStatement)
+	require.True(t, ok, "doc.Statements[0] is not ast.ExpressionStatement")
+
+	array, ok := stmt.Expression.(*ast.ArrayLiteral)
+	require.True(t, ok, "exp not *ast.ArrayLiteral")
+
+	require.Len(t, array.Elements, 3, "len(array.Elements) not 3")
+
+	// Test elements inside the array
+	require.IsType(t, &ast.IntegerLiteral{}, array.Elements[0])
+	require.IsType(t, &ast.StringLiteral{}, array.Elements[1])
+	require.IsType(t, &ast.BooleanLiteral{}, array.Elements[2])
+}
+
+func TestObjectLiteralParsing(t *testing.T) {
+	input := `{
+		"one": 1,
+		two: "two",
+		"three": true
+	}`
+
+	l := NewLexer([]byte(input))
+	p := NewParser(l)
+	doc := p.ParseDocument()
+	require.Empty(t, p.Errors(), "parser has errors")
+
+	stmt, ok := doc.Statements[0].(*ast.ExpressionStatement)
+	require.True(t, ok, "doc.Statements[0] is not ast.ExpressionStatement")
+
+	obj, ok := stmt.Expression.(*ast.ObjectLiteral)
+	require.True(t, ok, "exp not *ast.ObjectLiteral")
+
+	require.Len(t, obj.Pairs, 3, "obj.Pairs has wrong number of pairs")
+
+	// Check pair 1
+	require.Equal(t, "one", obj.Pairs[0].Key.(*ast.StringLiteral).Value)
+	require.Equal(t, int64(1), obj.Pairs[0].Value.(*ast.IntegerLiteral).Value)
+
+	// Check pair 2
+	require.Equal(t, "two", obj.Pairs[1].Key.(*ast.Identifier).Value)
+	require.Equal(t, "two", obj.Pairs[1].Value.(*ast.StringLiteral).Value)
+
+	// Check pair 3
+	require.Equal(t, "three", obj.Pairs[2].Key.(*ast.StringLiteral).Value)
+	require.Equal(t, true, obj.Pairs[2].Value.(*ast.BooleanLiteral).Value)
+}
