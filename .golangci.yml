@@ -1,0 +1,159 @@
+---
+version: "2"
+run:
+  tests: false
+linters:
+  default: none
+  enable:
+    # Default linters
+    - bodyclose
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+
+    # Disabled by default
+    - bodyclose
+    - goconst
+    - gocritic
+    - gosec
+    - misspell
+    - nilerr
+    - prealloc
+    - revive
+    - sloglint
+    - unconvert
+    - unparam
+    - unused
+    - cyclop
+    - gocyclo
+    - gocognit
+    - funlen
+  settings:
+    goconst:
+      ignore-string-values:
+        - "true"
+        - "false"
+    cyclop:
+      max-complexity: 30
+      package-average: 10
+    errcheck:
+      check-type-assertions: true
+    funlen:
+      lines: 100
+      statements: 50
+      ignore-comments: true
+    gocognit:
+      min-complexity: 20
+    gocyclo:
+      min-complexity: 20
+    gosec:
+      severity: medium
+      confidence: medium
+      config:
+        # Maximum allowed permissions mode for os.Mkdir and os.MkdirAll
+        G301: "0750"
+        # Maximum allowed permissions mode for os.OpenFile and os.Chmod
+        G302: "0640"
+        # Maximum allowed permissions mode for os.WriteFile and ioutil.WriteFile
+        G306: "0640"
+    revive:
+      enable-all-rules: false
+      rules:
+        - name: argument-limit
+        - name: atomic
+        - name: bool-literal-in-expr
+        - name: confusing-naming
+        - name: confusing-results
+        - name: constant-logical-expr
+        - name: context-keys-type
+        - name: datarace
+        - name: deep-exit
+        - name: defer
+          arguments:
+            - - immediate-recover
+              - recover
+              - return
+              - loop
+        - name: dot-imports
+        - name: duplicated-imports
+        - name: early-return
+        - name: errorf
+        - name: exported
+          arguments:
+            - checkPublicInterface
+        - name: filename-format
+        - name: flag-parameter
+        - name: get-return
+        - name: identical-branches
+        - name: if-return
+        - name: import-shadowing
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: nested-structs
+        - name: optimize-operands-order
+        - name: range
+        - name: redefines-builtin-id
+        - name: redundant-import-alias
+        - name: string-of-int
+        - name: struct-tag
+          arguments:
+            - json,inline
+        - name: superfluous-else
+        - name: time-equal
+        - name: time-naming
+        - name: unchecked-type-assertion
+        - name: unconditional-recursion
+        - name: unnecessary-stmt
+        - name: unreachable-code
+        - name: unused-parameter
+        - name: use-any
+        - name: useless-break
+        - name: var-declaration
+        - name: waitgroup-by-value
+    sloglint:
+      no-mixed-args: true
+      attr-only: true
+      no-global: all
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - errcheck
+          - gosec
+        path: _test\.go
+      - linters:
+          - cyclop
+          - goconst
+        path: (.+)_test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+severity:
+  default: error
+  rules:
+    - linters:
+        - cyclop
+        - funlen
+        - gocognit
+        - gocyclo
+      severity: info
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
