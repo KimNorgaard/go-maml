@@ -1,0 +1,61 @@
+name: "Benchmarks"
+
+on:
+  pull_request:
+
+jobs:
+  benchmark:
+    name: Run and Compare Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Base
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+
+      - name: Run Benchmark on Base
+        run: go test -bench=. -benchmem -count=5 ./... > base.bench
+
+      - name: Checkout Head
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Run Benchmark on Head
+        run: go test -bench=. -benchmem -count=5 ./... > head.bench
+
+      - name: Install benchstat
+        run: go install golang.org/x/perf/cmd/benchstat@latest
+
+      - name: Compare Benchmarks
+        id: compare
+        run: |
+          BENCH_OUTPUT=$(benchstat base.bench head.bench)
+          echo "$BENCH_OUTPUT"
+          echo "bench_output<<EOF" >> $GITHUB_OUTPUT
+          echo "$BENCH_OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Post Benchmark Comparison as PR Comment
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const output = `#### Benchmark Comparison
+            <details><summary>Click to see details</summary>
+
+            \`\`\`
+            ${{ steps.compare.outputs.bench_output }}
+            \`\`\`
+            </details>
+            `;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
