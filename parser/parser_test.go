@@ -297,6 +297,31 @@ func TestStringLiterals(t *testing.T) {
 			input:    `"a \u0022 quote"`,
 			expected: `a " quote`,
 		},
+		{
+			name:     "Escaped backspace",
+			input:    `"hello\bworld"`,
+			expected: "hello\bworld",
+		},
+		{
+			name:     "Escaped formfeed",
+			input:    `"hello\fworld"`,
+			expected: "hello\fworld",
+		},
+		{
+			name:     "Escaped newline",
+			input:    `"hello\nworld"`,
+			expected: "hello\nworld",
+		},
+		{
+			name:     "Escaped carriage return",
+			input:    `"hello\rworld"`,
+			expected: "hello\rworld",
+		},
+		{
+			name:     "Unicode escape sequence",
+			input:    `"a \u0022 quote"`,
+			expected: `a " quote`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -481,6 +506,26 @@ func TestMultilineStringLiterals(t *testing.T) {
 			name:     "Leading newline ignored",
 			input:    "\"\"\"\nhello\nworld\"\"\"",
 			expected: "hello\nworld",
+		},
+		{
+			name:     "Empty multiline string",
+			input:    `""""""`,
+			expected: "",
+		},
+		{
+			name:     "Single newline",
+			input:    "\"\"\"\n\n\"\"\"",
+			expected: "\n",
+		},
+		{
+			name:     "Preserves whitespace",
+			input:    "\"\"\"\n  line1\n  line2\n\"\"\"",
+			expected: "  line1\n  line2\n",
+		},
+		{
+			name:     "Contains quotes",
+			input:    `"""a " b "" c"""`,
+			expected: `a " b "" c`,
 		},
 		{
 			name:     "Empty multiline string",
