@@ -165,6 +165,11 @@ func TestIllegalTokens(t *testing.T) {
 			input:           `"é`,
 			expectedLiteral: "unterminated string",
 		},
+		{
+			name:            "Invalid utf8 sequence in string",
+			input:           "\"\xff\"",
+			expectedLiteral: "invalid utf-8 sequence in string",
+		},
 	}
 
 	for _, tt := range tests {

@@ -76,7 +76,7 @@ func (l *Lexer) NextToken() token.Token {
 	default:
 		if isDigit(l.ch) || (l.ch == '-' && (isDigit(l.peekChar()) || l.peekChar() == '.')) {
 			literal := l.readPotentialNumberOrIdentifier()
-			if typ, ok := parseAsNumber(literal); ok {
+			if typ, ok := ParseAsNumber(literal); ok {
 				tok.Type = typ
 			} else {
 				tok.Type = token.IDENT
@@ -158,12 +158,12 @@ func (l *Lexer) readPotentialNumberOrIdentifier() string {
 	return string(l.input[startPos:l.position])
 }
 
-// parseAsNumber validates if a literal string conforms to the MAML number ABNF.
+// ParseAsNumber validates if a literal string conforms to the MAML number ABNF.
 // It is a pure function that does not modify the lexer state.
 //
 // Valid examples: "0", "-10", "1.23", "5e-10", "-0.5E+2"
 // Invalid examples: "01", "--1", "1.2.3", "5e-", "e10"
-func parseAsNumber(s string) (token.TokenType, bool) {
+func ParseAsNumber(s string) (token.TokenType, bool) {
 	if len(s) == 0 {
 		return token.ILLEGAL, false
 	}
@@ -237,6 +237,9 @@ func (l *Lexer) readSingleLineString() (string, bool) {
 		if l.ch == '\n' || l.ch == 0 {
 			return "unterminated string", false
 		}
+		if l.ch == -1 {
+			return "invalid utf-8 sequence in string", false
+		}
 		if l.ch == '\\' {
 			l.advance()
 			switch l.ch {
@@ -275,6 +278,9 @@ func (l *Lexer) readMultilineString() (string, bool) {
 	for {
 		if l.ch == 0 {
 			return "unterminated multiline string", false
+		}
+		if l.ch == -1 {
+			return "invalid utf-8 sequence in multiline string", false
 		}
 		if l.ch == '"' && l.peekChar() == '"' && l.peekNextChar() == '"' {
 			l.advance()
