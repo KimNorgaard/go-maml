@@ -1,6 +1,7 @@
 package parser_test
 
 import (
+	_ "embed"
 	"testing"
 
 	"github.com/KimNorgaard/go-maml/ast"
@@ -644,5 +645,17 @@ func TestSyntaxErrors(t *testing.T) {
 			p.Parse()
 			require.NotEmpty(t, p.Errors(), "expected parser errors for input: %s", tt.input)
 		})
+	}
+}
+
+//go:embed testdata/large.maml
+var benchmarkInput []byte
+
+func BenchmarkParse(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		l := lexer.New(benchmarkInput)
+		p := parser.New(l)
+		p.Parse()
 	}
 }

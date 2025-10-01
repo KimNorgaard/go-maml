@@ -327,23 +327,6 @@ func TestMultilineStringEdgeCases(t *testing.T) {
 	}
 }
 
-//go:embed testdata/large.maml
-var benchmarkInput []byte
-
-func BenchmarkNextToken(b *testing.B) {
-	b.ReportAllocs()
-
-	for i := 0; i < b.N; i++ {
-		l := lexer.New(benchmarkInput)
-		for {
-			tok := l.NextToken()
-			if tok.Type == token.EOF {
-				break
-			}
-		}
-	}
-}
-
 func TestNewlineHandling(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -368,5 +351,22 @@ func TestNewlineHandling(t *testing.T) {
 			require.Equal(t, tt.expectedType, tok.Type)
 			require.Equal(t, tt.expectedLit, tok.Literal)
 		})
+	}
+}
+
+//go:embed testdata/large.maml
+var benchmarkInput []byte
+
+func BenchmarkNextToken(b *testing.B) {
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		l := lexer.New(benchmarkInput)
+		for {
+			tok := l.NextToken()
+			if tok.Type == token.EOF {
+				break
+			}
+		}
 	}
 }
