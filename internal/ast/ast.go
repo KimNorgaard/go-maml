@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/KimNorgaard/go-maml/token"
+	"github.com/KimNorgaard/go-maml/internal/token"
 )
 
 // Node is the base interface for all AST nodes.

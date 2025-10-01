@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"unicode/utf8"
 
-	"github.com/KimNorgaard/go-maml/token"
+	"github.com/KimNorgaard/go-maml/internal/token"
 )
 
 // Lexer holds the state for tokenizing MAML source.

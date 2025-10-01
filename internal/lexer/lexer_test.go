@@ -4,8 +4,8 @@ import (
 	_ "embed"
 	"testing"
 
-	"github.com/KimNorgaard/go-maml/lexer"
-	"github.com/KimNorgaard/go-maml/token"
+	"github.com/KimNorgaard/go-maml/internal/lexer"
+	"github.com/KimNorgaard/go-maml/internal/token"
 	"github.com/stretchr/testify/require"
 )
 

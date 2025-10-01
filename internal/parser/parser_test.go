@@ -4,9 +4,9 @@ import (
 	_ "embed"
 	"testing"
 
-	"github.com/KimNorgaard/go-maml/ast"
-	"github.com/KimNorgaard/go-maml/lexer"
-	"github.com/KimNorgaard/go-maml/parser"
+	"github.com/KimNorgaard/go-maml/internal/ast"
+	"github.com/KimNorgaard/go-maml/internal/lexer"
+	"github.com/KimNorgaard/go-maml/internal/parser"
 	"github.com/stretchr/testify/require"
 )
 

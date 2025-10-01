@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/KimNorgaard/go-maml/ast"
+	"github.com/KimNorgaard/go-maml/internal/ast"
 )
 
 const DefaultMaxDepth = 1000

@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KimNorgaard/go-maml/lexer"
-	"github.com/KimNorgaard/go-maml/mapper"
-	"github.com/KimNorgaard/go-maml/parser"
+	"github.com/KimNorgaard/go-maml/internal/lexer"
+	"github.com/KimNorgaard/go-maml/internal/mapper"
+	"github.com/KimNorgaard/go-maml/internal/parser"
 	"github.com/stretchr/testify/require"
 )
 

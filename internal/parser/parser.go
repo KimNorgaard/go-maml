@@ -5,9 +5,9 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/KimNorgaard/go-maml/ast"
-	"github.com/KimNorgaard/go-maml/lexer"
-	"github.com/KimNorgaard/go-maml/token"
+	"github.com/KimNorgaard/go-maml/internal/ast"
+	"github.com/KimNorgaard/go-maml/internal/lexer"
+	"github.com/KimNorgaard/go-maml/internal/token"
 )
 
 type prefixParseFn func() ast.Expression

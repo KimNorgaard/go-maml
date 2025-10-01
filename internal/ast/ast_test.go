@@ -3,7 +3,7 @@ package ast
 import (
 	"testing"
 
-	"github.com/KimNorgaard/go-maml/token"
+	"github.com/KimNorgaard/go-maml/internal/token"
 	"github.com/stretchr/testify/require"
 )
 

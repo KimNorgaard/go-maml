@@ -5,18 +5,15 @@ import (
 	"io"
 )
 
-// EncodeOption is a functional option for configuring an Encoder.
-type EncodeOption func(e *Encoder) error
-
 // Encoder writes MAML values to an output stream.
 type Encoder struct {
-	w io.Writer
+	w    io.Writer
+	opts []Option
 }
 
 // NewEncoder returns a new encoder that writes to w.
-func NewEncoder(w io.Writer, opts ...EncodeOption) *Encoder {
-	e := &Encoder{w: w}
-	return e
+func NewEncoder(w io.Writer, opts ...Option) *Encoder {
+	return &Encoder{w: w, opts: opts}
 }
 
 // Encode writes the MAML encoding of v to the stream.
