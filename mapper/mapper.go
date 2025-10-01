@@ -8,34 +8,29 @@ import (
 	"github.com/KimNorgaard/go-maml/ast"
 )
 
-const maxDepth = 1000
+const DefaultMaxDepth = 1000
 
 // Map walks the AST from the document root and populates the Go value pointed to by v.
-func Map(doc *ast.Document, v any) error {
+func Map(doc *ast.Document, v any, maxDepth int) error {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Pointer || rv.IsNil() {
 		return fmt.Errorf("maml: Unmarshal(non-pointer %T or nil)", v)
 	}
-
 	if len(doc.Statements) == 0 {
 		return nil
 	}
-
 	stmt, ok := doc.Statements[0].(*ast.ExpressionStatement)
 	if !ok {
 		return fmt.Errorf("maml: document root is not a valid expression statement")
 	}
-
 	m := &mapper{depth: maxDepth}
 	return m.mapValue(stmt.Expression, rv.Elem())
 }
 
-// mapper holds the state for the mapping process.
 type mapper struct {
 	depth int
 }
 
-// mapValue is the main recursive mapping function.
 func (m *mapper) mapValue(expr ast.Expression, rv reflect.Value) error {
 	m.depth--
 	if m.depth <= 0 {
@@ -43,19 +38,14 @@ func (m *mapper) mapValue(expr ast.Expression, rv reflect.Value) error {
 	}
 	defer func() { m.depth++ }()
 
-	// Special handling for null before any other logic.
 	if _, isNull := expr.(*ast.NullLiteral); isNull {
 		switch rv.Kind() {
 		case reflect.Interface, reflect.Pointer, reflect.Map, reflect.Slice:
-			rv.Set(reflect.Zero(rv.Type())) // Sets pointer/interface/slice/map to nil
-			return nil
-		default:
-			rv.Set(reflect.Zero(rv.Type())) // Sets scalar types to their zero value
+			rv.Set(reflect.Zero(rv.Type()))
 			return nil
 		}
 	}
 
-	// Indirect through pointers to find the concrete value.
 	for rv.Kind() == reflect.Pointer {
 		if rv.IsNil() {
 			rv.Set(reflect.New(rv.Type().Elem()))
@@ -63,16 +53,17 @@ func (m *mapper) mapValue(expr ast.Expression, rv reflect.Value) error {
 		rv = rv.Elem()
 	}
 
-	// Handle generic interfaces by creating a default concrete type.
 	if rv.Kind() == reflect.Interface {
 		return m.mapInterface(expr, rv)
 	}
-
 	if !rv.CanSet() {
 		return fmt.Errorf("maml: cannot set value of type %s", rv.Type())
 	}
 
 	switch node := expr.(type) {
+	case *ast.NullLiteral:
+		rv.Set(reflect.Zero(rv.Type()))
+		return nil
 	case *ast.StringLiteral:
 		return m.mapString(node, rv)
 	case *ast.IntegerLiteral:
@@ -200,13 +191,6 @@ func (m *mapper) mapMap(obj *ast.ObjectLiteral, rv reflect.Value) error {
 
 func (m *mapper) mapStruct(obj *ast.ObjectLiteral, rv reflect.Value) error {
 	fields := cachedFields(rv.Type())
-
-	// Create a map for simple, case-insensitive lookup.
-	lowerCaseMap := make(map[string]field)
-	for name, f := range fields {
-		lowerCaseMap[strings.ToLower(name)] = f
-	}
-
 	for _, pair := range obj.Pairs {
 		var keyStr string
 		switch k := pair.Key.(type) {
@@ -218,9 +202,22 @@ func (m *mapper) mapStruct(obj *ast.ObjectLiteral, rv reflect.Value) error {
 			return fmt.Errorf("maml: invalid key type in object literal: %T", pair.Key)
 		}
 
-		keyLower := strings.ToLower(keyStr)
-		if f, ok := lowerCaseMap[keyLower]; ok {
-			fieldVal := rv.FieldByIndex(f.idx)
+		var targetField *field
+		// Try a direct, case-sensitive match on the tag/field name.
+		if f, ok := fields[keyStr]; ok {
+			targetField = &f
+		} else {
+			// Fallback to a case-insensitive match on all fields.
+			for name, f := range fields {
+				if strings.EqualFold(name, keyStr) {
+					targetField = &f
+					break
+				}
+			}
+		}
+
+		if targetField != nil {
+			fieldVal := rv.FieldByIndex(targetField.idx)
 			if fieldVal.IsValid() && fieldVal.CanSet() {
 				if err := m.mapValue(pair.Value, fieldVal); err != nil {
 					return err
@@ -255,6 +252,8 @@ func (m *mapper) mapInterface(expr ast.Expression, rv reflect.Value) error {
 	case *ast.ObjectLiteral:
 		var o map[string]any
 		concreteVal = reflect.ValueOf(&o).Elem()
+	case *ast.NullLiteral:
+		return nil
 	default:
 		return fmt.Errorf("maml: cannot determine concrete type for interface{} for AST node %T", expr)
 	}

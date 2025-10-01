@@ -16,9 +16,9 @@ func unmarshal(input string, v any) error {
 	p := parser.New(l)
 	doc := p.Parse()
 	if len(p.Errors()) > 0 {
-		return fmt.Errorf("%s", p.Errors()[0])
+		return fmt.Errorf("parsing error: %s", p.Errors()[0])
 	}
-	return mapper.Map(doc, v)
+	return mapper.Map(doc, v, mapper.DefaultMaxDepth)
 }
 
 func TestUnmarshal(t *testing.T) {
@@ -167,7 +167,6 @@ func TestUnmarshalStructs(t *testing.T) {
 		require.NotNil(t, s.Notes)
 		require.Equal(t, notes, *s.Notes)
 
-		// Test with null to ensure pointer is not set
 		input2 := `{}`
 		var s2 testStruct
 		err = unmarshal(input2, &s2)
@@ -188,8 +187,7 @@ func TestUnmarshalStructs(t *testing.T) {
 
 func TestUnmarshalMaxDepth(t *testing.T) {
 	t.Run("Object nesting", func(t *testing.T) {
-		// Exceed the max depth (currently 1000)
-		depth := 1001
+		depth := mapper.DefaultMaxDepth + 1
 		input := strings.Repeat("{ key: ", depth) + "null" + strings.Repeat(" }", depth)
 
 		var v any
@@ -200,8 +198,7 @@ func TestUnmarshalMaxDepth(t *testing.T) {
 	})
 
 	t.Run("Array nesting", func(t *testing.T) {
-		// Exceed the max depth (currently 1000)
-		depth := 1001
+		depth := mapper.DefaultMaxDepth + 1
 		input := strings.Repeat("[", depth) + "null" + strings.Repeat("]", depth)
 
 		var v any
@@ -213,19 +210,18 @@ func TestUnmarshalMaxDepth(t *testing.T) {
 }
 
 func TestUnmarshalErrorCases(t *testing.T) {
-	// We only need a valid, non-empty document for these tests.
 	doc := parser.New(lexer.New([]byte("true"))).Parse()
 
 	t.Run("Error on non-pointer destination", func(t *testing.T) {
 		var v string
-		err := mapper.Map(doc, v)
+		err := mapper.Map(doc, v, mapper.DefaultMaxDepth)
 		require.Error(t, err)
 		require.EqualError(t, err, "maml: Unmarshal(non-pointer string or nil)")
 	})
 
 	t.Run("Error on nil pointer destination", func(t *testing.T) {
 		var v *string
-		err := mapper.Map(doc, v)
+		err := mapper.Map(doc, v, mapper.DefaultMaxDepth)
 		require.Error(t, err)
 		require.EqualError(t, err, "maml: Unmarshal(non-pointer *string or nil)")
 	})

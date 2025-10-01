@@ -22,9 +22,14 @@ func Marshal(v any, opts ...EncodeOption) ([]byte, error) {
 // Unmarshal parses the MAML-encoded data and stores the result
 // in the value pointed to by v.
 func Unmarshal(data []byte, v any, opts ...DecodeOption) error {
-	// Note: We would create a temporary decoder and apply opts here.
-	// dec := &Decoder{}
-	// for _, opt := range opts { opt(dec) }
+	dec := NewDecoder(nil, opts...)
+	dec.maxDepth = mapper.DefaultMaxDepth
+
+	for _, opt := range dec.opts {
+		if err := opt(dec); err != nil {
+			return err
+		}
+	}
 
 	l := lexer.New(data)
 	p := parser.New(l)
@@ -41,5 +46,5 @@ func Unmarshal(data []byte, v any, opts ...DecodeOption) error {
 		return fmt.Errorf("maml: parsing error: %s", errStr)
 	}
 
-	return mapper.Map(doc, v)
+	return mapper.Map(doc, v, dec.maxDepth)
 }
