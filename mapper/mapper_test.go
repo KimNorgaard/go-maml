@@ -73,6 +73,23 @@ func TestUnmarshal(t *testing.T) {
 		require.Equal(t, []string{"a", "b"}, strings)
 	})
 
+	t.Run("Arrays", func(t *testing.T) {
+		var arr [3]int
+		err := unmarshal(`[1, 2, 3]`, &arr)
+		require.NoError(t, err)
+		require.Equal(t, [3]int{1, 2, 3}, arr)
+
+		var arr2 [2]int
+		err = unmarshal(`[1, 2, 3]`, &arr2)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "cannot unmarshal array of length 3 into Go array of length 2")
+
+		var arr3 [4]int
+		err = unmarshal(`[1, 2, 3]`, &arr3)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "cannot unmarshal array of length 3 into Go array of length 4")
+	})
+
 	t.Run("Maps", func(t *testing.T) {
 		var m map[string]int
 		err := unmarshal(`{ a: 1, b: 2 }`, &m)
@@ -192,5 +209,24 @@ func TestUnmarshalMaxDepth(t *testing.T) {
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "reached max recursion depth")
+	})
+}
+
+func TestUnmarshalErrorCases(t *testing.T) {
+	// We only need a valid, non-empty document for these tests.
+	doc := parser.New(lexer.New([]byte("true"))).Parse()
+
+	t.Run("Error on non-pointer destination", func(t *testing.T) {
+		var v string
+		err := mapper.Map(doc, v)
+		require.Error(t, err)
+		require.EqualError(t, err, "maml: Unmarshal(non-pointer string or nil)")
+	})
+
+	t.Run("Error on nil pointer destination", func(t *testing.T) {
+		var v *string
+		err := mapper.Map(doc, v)
+		require.Error(t, err)
+		require.EqualError(t, err, "maml: Unmarshal(non-pointer *string or nil)")
 	})
 }
