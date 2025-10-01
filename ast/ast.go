@@ -113,7 +113,7 @@ type StringLiteral struct {
 
 func (sl *StringLiteral) expressionNode()      {}
 func (sl *StringLiteral) TokenLiteral() string { return sl.Token.Literal }
-func (sl *StringLiteral) String() string       { return strconv.Quote(sl.Token.Literal) }
+func (sl *StringLiteral) String() string       { return strconv.Quote(sl.Value) }
 
 // ArrayLiteral represents an array literal.
 type ArrayLiteral struct {
@@ -138,7 +138,7 @@ func (al *ArrayLiteral) String() string {
 // ObjectLiteral represents an object literal.
 type ObjectLiteral struct {
 	Token token.Token // the '{' token
-	Pairs []*PairExpression
+	Pairs []*KeyValueExpression
 }
 
 func (ol *ObjectLiteral) expressionNode()      {}
@@ -155,16 +155,16 @@ func (ol *ObjectLiteral) String() string {
 	return out.String()
 }
 
-// PairExpression represents a key-value pair in an object literal.
-type PairExpression struct {
+// KeyValueExpression represents a key-value pair in an object literal.
+type KeyValueExpression struct {
 	Token token.Token // The ':' token
 	Key   Expression
 	Value Expression
 }
 
-func (pe *PairExpression) expressionNode()      {}
-func (pe *PairExpression) TokenLiteral() string { return pe.Token.Literal }
-func (pe *PairExpression) String() string {
+func (pe *KeyValueExpression) expressionNode()      {}
+func (pe *KeyValueExpression) TokenLiteral() string { return pe.Token.Literal }
+func (pe *KeyValueExpression) String() string {
 	return pe.Key.String() + ":" + pe.Value.String()
 }
 

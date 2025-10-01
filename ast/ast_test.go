@@ -14,7 +14,7 @@ func TestString(t *testing.T) {
 				Token: token.Token{Type: token.LBRACE, Literal: "{"},
 				Expression: &ObjectLiteral{
 					Token: token.Token{Type: token.LBRACE, Literal: "{"},
-					Pairs: []*PairExpression{
+					Pairs: []*KeyValueExpression{
 						{
 							Token: token.Token{Type: token.COLON, Literal: ":"},
 							Key: &Identifier{
