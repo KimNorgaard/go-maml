@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/KimNorgaard/go-maml/lexer"
+	"github.com/KimNorgaard/go-maml/parser"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,9 +23,9 @@ func TestParserGolden(t *testing.T) {
 			src, err := os.ReadFile(file)
 			require.NoError(t, err)
 
-			l := NewLexer(src)
-			p := NewParser(l)
-			doc := p.ParseDocument()
+			l := lexer.New(src)
+			p := parser.New(l)
+			doc := p.Parse()
 
 			var actual string
 			errs := p.Errors()

@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 
 	"github.com/KimNorgaard/go-maml/ast"
@@ -9,9 +10,7 @@ import (
 	"github.com/KimNorgaard/go-maml/token"
 )
 
-type (
-	prefixParseFn func() ast.Expression
-)
+type prefixParseFn func() ast.Expression
 
 // Parser holds the state of the parser.
 type Parser struct {
@@ -290,17 +289,12 @@ func (p *Parser) parseObjectKey() ast.Expression {
 
 func (p *Parser) skip(types ...token.TokenType) {
 	for {
-		found := false
-		for _, t := range types {
-			if p.curTokenIs(t) {
-				p.nextToken()
-				found = true
-				break
-			}
-		}
-		if !found {
+		if found := slices.ContainsFunc(types, func(t token.TokenType) bool {
+			return p.curTokenIs(t)
+		}); !found {
 			break
 		}
+		p.nextToken()
 	}
 }
 

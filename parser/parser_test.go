@@ -586,3 +586,63 @@ func TestStringWithControlCharacter(t *testing.T) {
 	p.Parse()
 	require.NotEmpty(t, p.Errors(), "parser should have errors for control characters in strings")
 }
+
+func TestEmptyAndWhitespaceInput(t *testing.T) {
+	tests := []string{
+		"",
+		"   ",
+		"\n\t \n",
+		"# a comment\n#another comment\n",
+	}
+	for _, tt := range tests {
+		t.Run(tt, func(t *testing.T) {
+			l := lexer.New([]byte(tt))
+			p := parser.New(l)
+			doc := p.Parse()
+			require.Empty(t, p.Errors(), "parser should have no errors on empty/whitespace input")
+			require.NotNil(t, doc)
+			require.Len(t, doc.Statements, 0, "document should have zero statements")
+		})
+	}
+}
+
+func TestSyntaxErrors(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "Mismatched array delimiter",
+			input: "[1, 2)",
+		},
+		{
+			name:  "Mismatched object delimiter",
+			input: `{ "key": "value" ]`,
+		},
+		{
+			name:  "Missing colon in object",
+			input: `{ "key" 1 }`,
+		},
+		{
+			name:  "Missing value in object",
+			input: `{ "key": , }`,
+		},
+		// {
+		// 	name:  "Extra comma in array",
+		// 	input: "[1, , 2]",
+		// },
+		{
+			name:  "Unexpected token after expression",
+			input: `[1, 2] "hello"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := lexer.New([]byte(tt.input))
+			p := parser.New(l)
+			p.Parse()
+			require.NotEmpty(t, p.Errors(), "expected parser errors for input: %s", tt.input)
+		})
+	}
+}
