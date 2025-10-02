@@ -114,8 +114,7 @@ func TestUnmarshal_InvalidUTF8(t *testing.T) {
 	var v any
 	err := maml.Unmarshal(invalidUTF8, &v)
 	require.Error(t, err)
-	require.EqualError(t, err, "maml: parsing error: illegal token encountered: invalid utf-8 sequence in string\nunterminated object literal, expected '}' got EOF")
-	require.EqualError(t, err, "maml: parsing error: illegal token encountered: invalid utf-8 sequence in string\nunterminated object literal, expected '}' got EOF")
+	require.EqualError(t, err, "maml: parsing error at line 1, column 8: illegal token encountered: invalid utf-8 sequence in string")
 }
 
 func TestUnmarshal_PropagatesSyntaxErrors(t *testing.T) {
@@ -128,22 +127,22 @@ func TestUnmarshal_PropagatesSyntaxErrors(t *testing.T) {
 		{
 			name:        "Unterminated string",
 			input:       `{ key: "value }`,
-			expectedErr: "maml: parsing error: illegal token encountered: unterminated string\nunterminated object literal, expected '}' got EOF",
+			expectedErr: "maml: parsing error at line 1, column 8: illegal token encountered: unterminated string",
 		},
 		{
 			name:        "Missing colon",
 			input:       `{ key "value" }`,
-			expectedErr: "maml: parsing error: expected ':' after key, got STRING",
+			expectedErr: "maml: parsing error at line 1, column 7: expected ':' after key, got STRING",
 		},
 		{
 			name:        "Unbalanced braces",
 			input:       `{ key: "value"`,
-			expectedErr: "maml: parsing error: unterminated object literal, expected '}' got EOF",
+			expectedErr: "maml: parsing error at line 1, column 15: unterminated object literal, expected '}' got EOF",
 		},
 		{
 			name:        "Invalid map key",
 			input:       `{ []: "value" }`,
-			expectedErr: "maml: parsing error: invalid token for object key: [ ('[')",
+			expectedErr: "maml: parsing error at line 1, column 3: invalid token for object key: [ ('[')",
 		},
 	}
 

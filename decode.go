@@ -46,14 +46,7 @@ func (d *Decoder) Decode(out any) error {
 	doc := p.Parse()
 
 	if len(p.Errors()) > 0 {
-		var errStr string
-		for i, msg := range p.Errors() {
-			if i > 0 {
-				errStr += "\n"
-			}
-			errStr += msg
-		}
-		return fmt.Errorf("maml: parsing error: %s", errStr)
+		return p.Errors()
 	}
 
 	return d.decodeDocument(doc, out)

@@ -63,9 +63,13 @@ func (e *encodeState) marshalCustom(v reflect.Value, u Marshaler) (ast.Node, err
 	doc := p.Parse()
 
 	if len(p.Errors()) > 0 {
+		var errs []string
+		for _, err := range p.Errors() {
+			errs = append(errs, err.Message)
+		}
 		return nil, &MarshalerError{
 			Type: v.Type(),
-			Err:  fmt.Errorf("invalid MAML output: %s", strings.Join(p.Errors(), "; ")),
+			Err:  fmt.Errorf("invalid MAML output: %s", strings.Join(errs, "; ")),
 		}
 	}
 

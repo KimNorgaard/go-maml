@@ -1,6 +1,8 @@
 package maml
 
-import "reflect"
+import (
+	"reflect"
+)
 
 // A MarshalerError represents an error from calling a MarshalMAML method.
 type MarshalerError struct {

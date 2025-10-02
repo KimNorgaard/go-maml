@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/KimNorgaard/go-maml/errors"
 	"github.com/KimNorgaard/go-maml/internal/ast"
 	"github.com/KimNorgaard/go-maml/internal/lexer"
 	"github.com/KimNorgaard/go-maml/internal/token"
@@ -15,7 +16,7 @@ type prefixParseFn func() ast.Expression
 // Parser holds the state of the parser.
 type Parser struct {
 	l      *lexer.Lexer
-	errors []string
+	errors errors.ParseErrors
 
 	curToken  token.Token
 	peekToken token.Token
@@ -27,7 +28,7 @@ type Parser struct {
 func New(l *lexer.Lexer) *Parser {
 	p := &Parser{
 		l:      l,
-		errors: []string{},
+		errors: errors.ParseErrors{},
 	}
 
 	p.prefixParseFns = make(map[token.Type]prefixParseFn)
@@ -50,7 +51,7 @@ func New(l *lexer.Lexer) *Parser {
 }
 
 // Errors returns a slice of error messages encountered during parsing.
-func (p *Parser) Errors() []string {
+func (p *Parser) Errors() errors.ParseErrors {
 	return p.errors
 }
 
@@ -73,7 +74,7 @@ func (p *Parser) Parse() *ast.Document {
 	p.skip(token.NEWLINE)
 
 	if !p.curTokenIs(token.EOF) {
-		p.errors = append(p.errors, fmt.Sprintf("unexpected token after main value: %s ('%s')", p.curToken.Type, p.curToken.Literal))
+		p.appendError(fmt.Sprintf("unexpected token after main value: %s ('%s')", p.curToken.Type, p.curToken.Literal))
 	}
 
 	return document
@@ -114,7 +115,7 @@ func (p *Parser) parseIdentifier() ast.Expression {
 	if len(lit) > 0 {
 		firstChar := lit[0]
 		if (firstChar >= '0' && firstChar <= '9') || firstChar == '-' {
-			p.errors = append(p.errors, fmt.Sprintf("invalid number format: %s", lit))
+			p.appendError(fmt.Sprintf("invalid number format: %s", lit))
 			p.nextToken()
 			return nil
 		}
@@ -129,7 +130,7 @@ func (p *Parser) parseIntegerLiteral() ast.Expression {
 	lit := &ast.IntegerLiteral{Token: p.curToken}
 	value, err := strconv.ParseInt(p.curToken.Literal, 10, 64)
 	if err != nil {
-		p.errors = append(p.errors, fmt.Sprintf("could not parse %q as integer: %s", p.curToken.Literal, err))
+		p.appendError(fmt.Sprintf("could not parse %q as integer: %s", p.curToken.Literal, err))
 		p.nextToken()
 		return nil
 	}
@@ -142,7 +143,7 @@ func (p *Parser) parseFloatLiteral() ast.Expression {
 	lit := &ast.FloatLiteral{Token: p.curToken}
 	value, err := strconv.ParseFloat(p.curToken.Literal, 64)
 	if err != nil {
-		p.errors = append(p.errors, fmt.Sprintf("could not parse %q as float: %s", p.curToken.Literal, err))
+		p.appendError(fmt.Sprintf("could not parse %q as float: %s", p.curToken.Literal, err))
 		p.nextToken()
 		return nil
 	}
@@ -170,7 +171,7 @@ func (p *Parser) parseNullLiteral() ast.Expression {
 }
 
 func (p *Parser) parseIllegal() ast.Expression {
-	p.errors = append(p.errors, fmt.Sprintf("illegal token encountered: %s", p.curToken.Literal))
+	p.appendError(fmt.Sprintf("illegal token encountered: %s", p.curToken.Literal))
 	p.nextToken()
 	return nil
 }
@@ -182,7 +183,7 @@ func (p *Parser) parseArrayLiteral() ast.Expression {
 	array.Elements = p.parseExpressionList(token.RBRACK)
 
 	if !p.curTokenIs(token.RBRACK) {
-		p.errors = append(p.errors, fmt.Sprintf("unterminated array literal, expected ']' got %s", p.curToken.Type))
+		p.appendError(fmt.Sprintf("unterminated array literal, expected ']' got %s", p.curToken.Type))
 		return nil
 	}
 	p.nextToken() // Consume ']'
@@ -226,7 +227,7 @@ func (p *Parser) parseObjectLiteral() ast.Expression {
 			}
 
 			if keys[keyStr] {
-				p.errors = append(p.errors, fmt.Sprintf("duplicate key in object: %s", keyStr))
+				p.appendError(fmt.Sprintf("duplicate key in object: %s", keyStr))
 			}
 			keys[keyStr] = true
 			obj.Pairs = append(obj.Pairs, pair)
@@ -241,7 +242,7 @@ func (p *Parser) parseObjectLiteral() ast.Expression {
 	}
 
 	if !p.curTokenIs(token.RBRACE) {
-		p.errors = append(p.errors, fmt.Sprintf("unterminated object literal, expected '}' got %s", p.curToken.Type))
+		p.appendError(fmt.Sprintf("unterminated object literal, expected '}' got %s", p.curToken.Type))
 		return nil
 	}
 	p.nextToken() // Consume '}'
@@ -255,7 +256,7 @@ func (p *Parser) parseKeyValuePair() *ast.KeyValueExpression {
 	}
 
 	if !p.curTokenIs(token.COLON) {
-		p.errors = append(p.errors, fmt.Sprintf("expected ':' after key, got %s", p.curToken.Type))
+		p.appendError(fmt.Sprintf("expected ':' after key, got %s", p.curToken.Type))
 		return nil
 	}
 	p.nextToken() // Consume ':'
@@ -280,7 +281,7 @@ func (p *Parser) parseObjectKey() ast.Expression {
 		key = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
 		p.nextToken()
 	default:
-		p.errors = append(p.errors, fmt.Sprintf("invalid token for object key: %s ('%s')", p.curToken.Type, p.curToken.Literal))
+		p.appendError(fmt.Sprintf("invalid token for object key: %s ('%s')", p.curToken.Type, p.curToken.Literal))
 		p.nextToken()
 		return nil
 	}
@@ -304,7 +305,11 @@ func (p *Parser) registerPrefix(tokenType token.Type, fn prefixParseFn) {
 
 func (p *Parser) noPrefixParseFnError(t token.Type) {
 	msg := fmt.Sprintf("no prefix parse function for %s ('%s') found", t, p.curToken.Literal)
-	p.errors = append(p.errors, msg)
+	p.appendError(msg)
+}
+
+func (p *Parser) appendError(msg string) {
+	p.errors = append(p.errors, errors.ParseError{Message: msg, Line: p.curToken.Line, Column: p.curToken.Column})
 }
 
 func (p *Parser) curTokenIs(t token.Type) bool {
