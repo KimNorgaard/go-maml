@@ -3,7 +3,7 @@
     another_string_key: "a value for another string key",
     key_with_hyphen: "value-1",
     key_with_underscore: "value_2",
-    string key: "this key is a string literal"
+    "string key": "this key is a string literal"
   },
   arrays: {
     array_of_objects: [
@@ -47,7 +47,7 @@
     simple_array: [
       1,
       "two",
-      3,
+      3.0,
       true,
       null
     ]

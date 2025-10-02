@@ -6,6 +6,7 @@ import (
 	"math"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/KimNorgaard/go-maml/internal/ast"
@@ -145,14 +146,18 @@ func isBareKey(s string) bool {
 	}
 
 	for _, r := range s {
-		// This is isIdentifierChar from the lexer.
-		if !(('a' <= r && r <= 'z') || ('A' <= r && r <= 'Z') ||
-			('0' <= r && r <= '9') || r == '_' || r == '-') {
+		if !isIdentifierChar(r) {
 			return false
 		}
 	}
 
 	return true
+}
+
+// isIdentifierChar checks if a rune is a valid character for a MAML identifier.
+func isIdentifierChar(r rune) bool {
+	return ('a' <= r && r <= 'z') || ('A' <= r && r <= 'Z') ||
+		('0' <= r && r <= '9') || r == '_' || r == '-'
 }
 
 func (e *encodeState) marshalValue(v reflect.Value) (ast.Node, error) { //nolint:gocyclo
@@ -254,13 +259,11 @@ func (e *encodeState) marshalUint(v reflect.Value) (ast.Node, error) {
 
 func (e *encodeState) marshalFloat(v reflect.Value) (ast.Node, error) {
 	val := v.Float()
-	var lit string
-	// If the float is a whole number, format it with a decimal point
-	// to ensure it's unmarshaled back as a float.
-	if val == math.Trunc(val) {
-		lit = fmt.Sprintf("%.1f", val)
-	} else {
-		lit = fmt.Sprintf("%g", val)
+	lit := strconv.FormatFloat(val, 'g', -1, 64)
+	// If the formatted string doesn't contain a decimal or an exponent, add .0
+	// to ensure it's treated as a float.
+	if !strings.ContainsAny(lit, ".eE") {
+		lit += ".0"
 	}
 	return &ast.FloatLiteral{Token: token.Token{Type: token.FLOAT, Literal: lit}, Value: val}, nil
 }
@@ -369,7 +372,7 @@ func (e *encodeState) marshalMap(v reflect.Value) (ast.Node, error) {
 	}, nil
 }
 
-func (e *encodeState) marshalStruct(v reflect.Value) (ast.Node, error) {
+func (e *encodeState) marshalStruct(v reflect.Value) (ast.Node, error) { //nolint:gocognit
 	pairs := make([]*ast.KeyValueExpression, 0, v.NumField())
 	t := v.Type()
 
