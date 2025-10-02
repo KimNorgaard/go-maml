@@ -7,6 +7,8 @@ jobs:
   benchmark:
     name: Run and Compare Benchmarks
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     steps:
       - name: Checkout Base
         uses: actions/checkout@v5
