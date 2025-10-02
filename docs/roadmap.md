@@ -14,7 +14,7 @@
 - Implement the `Encoder` to serialize an AST back to a formatted MAML string.
 - Add detailed error messages for the mapping layer (e.g., type mismatches).
 
-## Phase 3: Advanced Features and Polish
+## Phase 3: Advanced Features and Polish - COMPLETE
 
 - Integrate support for the custom marshaling interfaces.
 - Add more functional options for fine-grained encoder/decoder control.

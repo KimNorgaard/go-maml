@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"github.com/KimNorgaard/go-maml/internal/ast"
+	"github.com/KimNorgaard/go-maml/internal/lexer"
+	"github.com/KimNorgaard/go-maml/internal/parser"
 )
 
 // Decoder reads and decodes MAML values from an input stream.
@@ -16,6 +18,8 @@ type Decoder struct {
 	opts []Option
 }
 
+const defaultMaxDepth = 1000
+
 // NewDecoder returns a new decoder that reads from r. It stores options
 // to be applied later by the Decode method.
 func NewDecoder(r io.Reader, opts ...Option) *Decoder {
@@ -23,25 +27,47 @@ func NewDecoder(r io.Reader, opts ...Option) *Decoder {
 }
 
 // Decode reads the next MAML-encoded value from its input
-// and stores it in the value pointed to by v.
+// and stores it in the value pointed to by out.
 // Note: This is a non-streaming implementation. It reads the entire
 // reader into memory first before parsing.
-func (d *Decoder) Decode(v any) error {
+func (d *Decoder) Decode(out any) error {
 	if d.r == nil {
-		return nil
+		return fmt.Errorf("maml: Decode(nil reader)")
 	}
 	data, err := io.ReadAll(d.r)
 	if err != nil {
 		return err
 	}
 
-	return Unmarshal(data, v, d.opts...)
+	l := lexer.New(data)
+	p := parser.New(l)
+	doc := p.Parse()
+
+	if len(p.Errors()) > 0 {
+		var errStr string
+		for i, msg := range p.Errors() {
+			if i > 0 {
+				errStr += "\n"
+			}
+			errStr += msg
+		}
+		return fmt.Errorf("maml: parsing error: %s", errStr)
+	}
+
+	return d.decode(doc, out)
 }
 
-const defaultMaxDepth = 1000
+// decode processes the options and maps the AST to a Go value.
+func (d *Decoder) decode(doc *ast.Document, v any) error {
+	o := options{
+		maxDepth: defaultMaxDepth,
+	}
+	for _, opt := range d.opts {
+		if err := opt(&o); err != nil {
+			return err
+		}
+	}
 
-// mapDocument walks the AST from the document root and populates the Go value pointed to by v.
-func mapDocument(doc *ast.Document, v any, opts *options) error {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Pointer || rv.IsNil() {
 		return fmt.Errorf("maml: Unmarshal(non-pointer %T or nil)", v)
@@ -53,20 +79,20 @@ func mapDocument(doc *ast.Document, v any, opts *options) error {
 	if !ok {
 		return fmt.Errorf("maml: document root is not a valid expression statement")
 	}
-	d := &decodeState{depth: opts.maxDepth}
-	return d.mapValue(stmt.Expression, rv.Elem())
+	ds := &decodeState{depth: o.maxDepth}
+	return ds.mapValue(stmt.Expression, rv.Elem())
 }
 
 type decodeState struct {
 	depth int
 }
 
-func (d *decodeState) mapValue(expr ast.Expression, rv reflect.Value) error {
-	d.depth--
-	if d.depth <= 0 {
+func (ds *decodeState) mapValue(expr ast.Expression, rv reflect.Value) error {
+	ds.depth--
+	if ds.depth <= 0 {
 		return fmt.Errorf("maml: reached max recursion depth")
 	}
-	defer func() { d.depth++ }()
+	defer func() { ds.depth++ }()
 
 	if _, isNull := expr.(*ast.NullLiteral); isNull {
 		switch rv.Kind() {
@@ -84,7 +110,7 @@ func (d *decodeState) mapValue(expr ast.Expression, rv reflect.Value) error {
 	}
 
 	if rv.Kind() == reflect.Interface {
-		return d.mapInterface(expr, rv)
+		return ds.mapInterface(expr, rv)
 	}
 	if !rv.CanSet() {
 		return fmt.Errorf("maml: cannot set value of type %s", rv.Type())
@@ -95,28 +121,28 @@ func (d *decodeState) mapValue(expr ast.Expression, rv reflect.Value) error {
 		rv.Set(reflect.Zero(rv.Type()))
 		return nil
 	case *ast.StringLiteral:
-		return d.mapString(node, rv)
+		return ds.mapString(node, rv)
 	case *ast.IntegerLiteral:
-		return d.mapInt(node, rv)
+		return ds.mapInt(node, rv)
 	case *ast.FloatLiteral:
-		return d.mapFloat(node, rv)
+		return ds.mapFloat(node, rv)
 	case *ast.BooleanLiteral:
-		return d.mapBool(node, rv)
+		return ds.mapBool(node, rv)
 	case *ast.ArrayLiteral:
 		switch rv.Kind() {
 		case reflect.Slice:
-			return d.mapSlice(node, rv)
+			return ds.mapSlice(node, rv)
 		case reflect.Array:
-			return d.mapArray(node, rv)
+			return ds.mapArray(node, rv)
 		default:
 			return fmt.Errorf("maml: cannot unmarshal array into Go value of type %s", rv.Type())
 		}
 	case *ast.ObjectLiteral:
 		switch rv.Kind() {
 		case reflect.Struct:
-			return d.mapStruct(node, rv)
+			return ds.mapStruct(node, rv)
 		case reflect.Map:
-			return d.mapMap(node, rv)
+			return ds.mapMap(node, rv)
 		default:
 			return fmt.Errorf("maml: cannot unmarshal object into Go value of type %s", rv.Type())
 		}
@@ -125,7 +151,7 @@ func (d *decodeState) mapValue(expr ast.Expression, rv reflect.Value) error {
 	}
 }
 
-func (d *decodeState) mapString(s *ast.StringLiteral, rv reflect.Value) error {
+func (ds *decodeState) mapString(s *ast.StringLiteral, rv reflect.Value) error {
 	if rv.Kind() != reflect.String {
 		return fmt.Errorf("maml: cannot unmarshal string into Go value of type %s", rv.Type())
 	}
@@ -133,7 +159,7 @@ func (d *decodeState) mapString(s *ast.StringLiteral, rv reflect.Value) error {
 	return nil
 }
 
-func (d *decodeState) mapInt(i *ast.IntegerLiteral, rv reflect.Value) error {
+func (ds *decodeState) mapInt(i *ast.IntegerLiteral, rv reflect.Value) error {
 	switch rv.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		if rv.OverflowInt(i.Value) {
@@ -146,7 +172,7 @@ func (d *decodeState) mapInt(i *ast.IntegerLiteral, rv reflect.Value) error {
 	}
 }
 
-func (d *decodeState) mapFloat(f *ast.FloatLiteral, rv reflect.Value) error {
+func (ds *decodeState) mapFloat(f *ast.FloatLiteral, rv reflect.Value) error {
 	switch rv.Kind() {
 	case reflect.Float32, reflect.Float64:
 		if rv.OverflowFloat(f.Value) {
@@ -159,7 +185,7 @@ func (d *decodeState) mapFloat(f *ast.FloatLiteral, rv reflect.Value) error {
 	}
 }
 
-func (d *decodeState) mapBool(b *ast.BooleanLiteral, rv reflect.Value) error {
+func (ds *decodeState) mapBool(b *ast.BooleanLiteral, rv reflect.Value) error {
 	if rv.Kind() != reflect.Bool {
 		return fmt.Errorf("maml: cannot unmarshal boolean into Go value of type %s", rv.Type())
 	}
@@ -167,11 +193,11 @@ func (d *decodeState) mapBool(b *ast.BooleanLiteral, rv reflect.Value) error {
 	return nil
 }
 
-func (d *decodeState) mapSlice(a *ast.ArrayLiteral, rv reflect.Value) error {
+func (ds *decodeState) mapSlice(a *ast.ArrayLiteral, rv reflect.Value) error {
 	sliceType := rv.Type()
 	newSlice := reflect.MakeSlice(sliceType, len(a.Elements), len(a.Elements))
 	for i, elemAST := range a.Elements {
-		if err := d.mapValue(elemAST, newSlice.Index(i)); err != nil {
+		if err := ds.mapValue(elemAST, newSlice.Index(i)); err != nil {
 			return err
 		}
 	}
@@ -179,19 +205,19 @@ func (d *decodeState) mapSlice(a *ast.ArrayLiteral, rv reflect.Value) error {
 	return nil
 }
 
-func (d *decodeState) mapArray(a *ast.ArrayLiteral, rv reflect.Value) error {
+func (ds *decodeState) mapArray(a *ast.ArrayLiteral, rv reflect.Value) error {
 	if rv.Len() != len(a.Elements) {
 		return fmt.Errorf("maml: cannot unmarshal array of length %d into Go array of length %d", len(a.Elements), rv.Len())
 	}
 	for i, elemAST := range a.Elements {
-		if err := d.mapValue(elemAST, rv.Index(i)); err != nil {
+		if err := ds.mapValue(elemAST, rv.Index(i)); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (d *decodeState) mapMap(obj *ast.ObjectLiteral, rv reflect.Value) error {
+func (ds *decodeState) mapMap(obj *ast.ObjectLiteral, rv reflect.Value) error {
 	mapType := rv.Type()
 	if mapType.Key().Kind() != reflect.String {
 		return fmt.Errorf("maml: cannot unmarshal object into map with non-string key type %s", mapType.Key())
@@ -211,7 +237,7 @@ func (d *decodeState) mapMap(obj *ast.ObjectLiteral, rv reflect.Value) error {
 			return fmt.Errorf("maml: invalid key type in object literal: %T", pair.Key)
 		}
 		newVal := reflect.New(elemType).Elem()
-		if err := d.mapValue(pair.Value, newVal); err != nil {
+		if err := ds.mapValue(pair.Value, newVal); err != nil {
 			return err
 		}
 		rv.SetMapIndex(reflect.ValueOf(keyStr), newVal)
@@ -219,7 +245,7 @@ func (d *decodeState) mapMap(obj *ast.ObjectLiteral, rv reflect.Value) error {
 	return nil
 }
 
-func (d *decodeState) mapStruct(obj *ast.ObjectLiteral, rv reflect.Value) error {
+func (ds *decodeState) mapStruct(obj *ast.ObjectLiteral, rv reflect.Value) error {
 	fields := cachedFields(rv.Type())
 	for _, pair := range obj.Pairs {
 		var keyStr string
@@ -249,7 +275,7 @@ func (d *decodeState) mapStruct(obj *ast.ObjectLiteral, rv reflect.Value) error 
 		if targetField != nil {
 			fieldVal := rv.FieldByIndex(targetField.idx)
 			if fieldVal.IsValid() && fieldVal.CanSet() {
-				if err := d.mapValue(pair.Value, fieldVal); err != nil {
+				if err := ds.mapValue(pair.Value, fieldVal); err != nil {
 					return err
 				}
 			}
@@ -258,7 +284,7 @@ func (d *decodeState) mapStruct(obj *ast.ObjectLiteral, rv reflect.Value) error 
 	return nil
 }
 
-func (d *decodeState) mapInterface(expr ast.Expression, rv reflect.Value) error {
+func (ds *decodeState) mapInterface(expr ast.Expression, rv reflect.Value) error {
 	if rv.NumMethod() != 0 {
 		return fmt.Errorf("maml: cannot unmarshal into non-empty interface %s", rv.Type())
 	}
@@ -287,7 +313,7 @@ func (d *decodeState) mapInterface(expr ast.Expression, rv reflect.Value) error 
 	default:
 		return fmt.Errorf("maml: cannot determine concrete type for interface{} for AST node %T", expr)
 	}
-	if err := d.mapValue(expr, concreteVal); err != nil {
+	if err := ds.mapValue(expr, concreteVal); err != nil {
 		return err
 	}
 	rv.Set(concreteVal)

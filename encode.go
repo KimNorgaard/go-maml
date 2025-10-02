@@ -24,8 +24,8 @@ func NewEncoder(w io.Writer, opts ...Option) *Encoder {
 	return &Encoder{w: w, opts: opts}
 }
 
-// Encode writes the MAML encoding of v to the stream.
-func (e *Encoder) Encode(v any) error {
+// Encode writes the MAML encoding of in to the stream.
+func (e *Encoder) Encode(in any) error {
 	o := options{}
 	for _, opt := range e.opts {
 		if err := opt(&o); err != nil {
@@ -34,7 +34,7 @@ func (e *Encoder) Encode(v any) error {
 	}
 
 	es := &encodeState{seen: make(map[uintptr]struct{})}
-	node, err := es.marshalValue(reflect.ValueOf(v))
+	node, err := es.marshalValue(reflect.ValueOf(in))
 	if err != nil {
 		return fmt.Errorf("maml: %w", err)
 	}

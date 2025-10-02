@@ -35,14 +35,14 @@ func MaxDepth(n int) Option {
 // Indent returns an Option that sets the indentation for the encoder.
 // It specifies the number of spaces to use for each level of indentation.
 //
-// If spaces is 0, the output will be compact with no newlines or indentation.
+// If n is 0, the output will be compact with no newlines or indentation.
 // The number of spaces must not be negative.
-func Indent(spaces int) Option {
+func Indent(n int) Option {
 	return func(o *options) error {
-		if spaces < 0 {
+		if n < 0 {
 			return fmt.Errorf("maml: indent spaces cannot be negative")
 		}
-		o.indent = &spaces
+		o.indent = &n
 		return nil
 	}
 }
