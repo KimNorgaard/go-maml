@@ -1,1 +1,1 @@
-foobar
+maml: cannot determine concrete type for interface{} for AST node *ast.Identifier

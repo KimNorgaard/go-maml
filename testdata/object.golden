@@ -1,1 +1,5 @@
-{"one":1, two:"two", "three":true}
+{
+  one: 1,
+  two: "two",
+  three: true
+}

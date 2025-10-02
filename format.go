@@ -37,12 +37,17 @@ func (f *formatter) format(node ast.Node) error {
 	return f.writeNode(node)
 }
 
+func (f *formatter) write(s string) error {
+	_, err := f.w.Write([]byte(s))
+	return err
+}
+
 func (f *formatter) writeIndent() error {
 	if f.indent == "" {
 		return nil
 	}
 	for i := 0; i < f.depth; i++ {
-		if _, err := f.w.Write([]byte(f.indent)); err != nil {
+		if err := f.write(f.indent); err != nil {
 			return err
 		}
 	}
@@ -52,15 +57,12 @@ func (f *formatter) writeIndent() error {
 func (f *formatter) writeNode(node ast.Node) error {
 	switch n := node.(type) {
 	case *ast.Document:
-		// A document can have multiple statements, but for marshaling,
-		// it will typically be just one.
 		for i, stmt := range n.Statements {
 			if err := f.writeNode(stmt); err != nil {
 				return err
 			}
-			// Add a newline if there are multiple top-level statements.
 			if i < len(n.Statements)-1 {
-				if _, err := f.w.Write([]byte("\n")); err != nil {
+				if err := f.write("\n"); err != nil {
 					return err
 				}
 			}
@@ -71,131 +73,133 @@ func (f *formatter) writeNode(node ast.Node) error {
 		return f.writeNode(n.Expression)
 
 	case *ast.ObjectLiteral:
-		if _, err := f.w.Write([]byte("{")); err != nil {
-			return err
-		}
-		if len(n.Pairs) > 0 {
-			if f.indent != "" {
-				f.depth++
-				for i, pair := range n.Pairs {
-					if _, err := f.w.Write([]byte("\n")); err != nil {
-						return err
-					}
-					if err := f.writeIndent(); err != nil {
-						return err
-					}
-					if _, err := f.w.Write([]byte(pair.Key.String())); err != nil {
-						return err
-					}
-					if _, err := f.w.Write([]byte(": ")); err != nil {
-						return err
-					}
-					if err := f.writeNode(pair.Value); err != nil {
-						return err
-					}
-					if i < len(n.Pairs)-1 {
-						if _, err := f.w.Write([]byte(",")); err != nil {
-							return err
-						}
-					}
-				}
-				f.depth--
-				if _, err := f.w.Write([]byte("\n")); err != nil {
-					return err
-				}
-				if err := f.writeIndent(); err != nil {
-					return err
-				}
-			} else {
-				for i, pair := range n.Pairs {
-					if i > 0 {
-						if _, err := f.w.Write([]byte(", ")); err != nil {
-							return err
-						}
-					} else {
-						if _, err := f.w.Write([]byte(" ")); err != nil {
-							return err
-						}
-					}
-					if _, err := f.w.Write([]byte(pair.Key.String())); err != nil {
-						return err
-					}
-					if _, err := f.w.Write([]byte(": ")); err != nil {
-						return err
-					}
-					if err := f.writeNode(pair.Value); err != nil {
-						return err
-					}
-				}
-				if len(n.Pairs) > 0 {
-					if _, err := f.w.Write([]byte(" ")); err != nil {
-						return err
-					}
-				}
-			}
-		}
-		_, err := f.w.Write([]byte("}"))
-		return err
+		return f.writeObject(n)
 
 	case *ast.ArrayLiteral:
-		if _, err := f.w.Write([]byte("[")); err != nil {
-			return err
-		}
-		if len(n.Elements) > 0 {
-			if f.indent != "" {
-				f.depth++
-				for i, elem := range n.Elements {
-					if _, err := f.w.Write([]byte("\n")); err != nil {
-						return err
-					}
-					if err := f.writeIndent(); err != nil {
-						return err
-					}
-					if err := f.writeNode(elem); err != nil {
-						return err
-					}
-					if i < len(n.Elements)-1 {
-						if _, err := f.w.Write([]byte(",")); err != nil {
-							return err
-						}
-					}
-				}
-				f.depth--
-				if _, err := f.w.Write([]byte("\n")); err != nil {
-					return err
-				}
-				if err := f.writeIndent(); err != nil {
-					return err
-				}
-			} else {
-				for i, elem := range n.Elements {
-					if i > 0 {
-						if _, err := f.w.Write([]byte(", ")); err != nil {
-							return err
-						}
-					}
-					if err := f.writeNode(elem); err != nil {
-						return err
-					}
-				}
-			}
-		}
-		_, err := f.w.Write([]byte("]"))
-		return err
+		return f.writeArray(n)
 
 	case *ast.StringLiteral:
-		_, err := f.w.Write([]byte(n.String()))
-		return err
+		return f.write(n.String())
 
 	case *ast.IntegerLiteral, *ast.FloatLiteral, *ast.BooleanLiteral:
-		_, err := f.w.Write([]byte(n.TokenLiteral()))
-		return err
+		return f.write(n.TokenLiteral())
 
 	case *ast.NullLiteral:
-		_, err := f.w.Write([]byte("null"))
-		return err
+		return f.write("null")
 
 	default:
 		return fmt.Errorf("maml: unsupported node type for formatting: %T", n)
 	}
+}
+
+func (f *formatter) writeObject(obj *ast.ObjectLiteral) error {
+	if err := f.write("{"); err != nil {
+		return err
+	}
+
+	if len(obj.Pairs) == 0 {
+		return f.write("}")
+	}
+
+	if f.indent != "" { // Pretty-print mode
+		f.depth++
+		for i, pair := range obj.Pairs {
+			if err := f.write("\n"); err != nil {
+				return err
+			}
+			if err := f.writeIndent(); err != nil {
+				return err
+			}
+			if err := f.write(pair.Key.String() + ": "); err != nil {
+				return err
+			}
+			if err := f.writeNode(pair.Value); err != nil {
+				return err
+			}
+			if i < len(obj.Pairs)-1 {
+				if err := f.write(","); err != nil {
+					return err
+				}
+			}
+		}
+		f.depth--
+		if err := f.write("\n"); err != nil {
+			return err
+		}
+		if err := f.writeIndent(); err != nil {
+			return err
+		}
+	} else { // Compact mode
+		if err := f.write(" "); err != nil {
+			return err
+		}
+		for i, pair := range obj.Pairs {
+			if i > 0 {
+				if err := f.write(", "); err != nil {
+					return err
+				}
+			}
+			if err := f.write(pair.Key.String() + ": "); err != nil {
+				return err
+			}
+			if err := f.writeNode(pair.Value); err != nil {
+				return err
+			}
+		}
+		if err := f.write(" "); err != nil {
+			return err
+		}
+	}
+
+	return f.write("}")
+}
+
+func (f *formatter) writeArray(arr *ast.ArrayLiteral) error {
+	if err := f.write("["); err != nil {
+		return err
+	}
+
+	if len(arr.Elements) == 0 {
+		return f.write("]")
+	}
+
+	if f.indent != "" { // Pretty-print mode
+		f.depth++
+		for i, elem := range arr.Elements {
+			if err := f.write("\n"); err != nil {
+				return err
+			}
+			if err := f.writeIndent(); err != nil {
+				return err
+			}
+			if err := f.writeNode(elem); err != nil {
+				return err
+			}
+			if i < len(arr.Elements)-1 {
+				if err := f.write(","); err != nil {
+					return err
+				}
+			}
+		}
+		f.depth--
+		if err := f.write("\n"); err != nil {
+			return err
+		}
+		if err := f.writeIndent(); err != nil {
+			return err
+		}
+	} else { // Compact mode
+		for i, elem := range arr.Elements {
+			if i > 0 {
+				if err := f.write(", "); err != nil {
+					return err
+				}
+			}
+			if err := f.writeNode(elem); err != nil {
+				return err
+			}
+		}
+	}
+
+	return f.write("]")
 }

@@ -1,1 +1,4 @@
-{key:"value", number:123}
+{
+  number: 123,
+  key: "value"
+}
