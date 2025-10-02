@@ -2,11 +2,11 @@ package maml_test
 
 import (
 	"bytes"
-	_ "embed"
 	"strings"
 	"testing"
 
 	"github.com/KimNorgaard/go-maml"
+	"github.com/KimNorgaard/go-maml/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -222,10 +222,10 @@ func TestUnmarshalErrorCases(t *testing.T) {
 	})
 }
 
-//go:embed testdata/large.maml
-var benchmarkMAMLInput []byte
-
 func BenchmarkDecode(b *testing.B) {
+	benchmarkMAMLInput, err := testutil.ReadTestData("large.maml")
+	require.NoError(b, err)
+
 	b.ReportAllocs()
 	b.SetBytes(int64(len(benchmarkMAMLInput)))
 
@@ -234,7 +234,7 @@ func BenchmarkDecode(b *testing.B) {
 
 	b.ResetTimer()
 
-	for b.Loop() {
+	for i := 0; i < b.N; i++ {
 		r.Seek(0, 0)
 		dec := maml.NewDecoder(r)
 		if err := dec.Decode(&v); err != nil {

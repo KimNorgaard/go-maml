@@ -1,8 +1,9 @@
 package parser_test
 
 import (
-	_ "embed"
 	"testing"
+
+	"github.com/KimNorgaard/go-maml/internal/testutil"
 
 	"github.com/KimNorgaard/go-maml/internal/ast"
 	"github.com/KimNorgaard/go-maml/internal/lexer"
@@ -693,14 +694,15 @@ func TestSyntaxErrors(t *testing.T) {
 	}
 }
 
-//go:embed testdata/large.maml
-var benchmarkInput []byte
-
 func BenchmarkParse(b *testing.B) {
+	benchmarkInput, err := testutil.ReadTestData("large.maml")
+	require.NoError(b, err)
+
 	b.ReportAllocs()
+
 	for i := 0; i < b.N; i++ {
 		l := lexer.New(benchmarkInput)
 		p := parser.New(l)
-		p.Parse()
+		_ = p.Parse()
 	}
 }

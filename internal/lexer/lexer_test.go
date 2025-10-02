@@ -1,10 +1,10 @@
 package lexer_test
 
 import (
-	_ "embed"
 	"testing"
 
 	"github.com/KimNorgaard/go-maml/internal/lexer"
+	"github.com/KimNorgaard/go-maml/internal/testutil"
 	"github.com/KimNorgaard/go-maml/internal/token"
 	"github.com/stretchr/testify/require"
 )
@@ -354,10 +354,10 @@ func TestNewlineHandling(t *testing.T) {
 	}
 }
 
-//go:embed testdata/large.maml
-var benchmarkInput []byte
-
 func BenchmarkNextToken(b *testing.B) {
+	benchmarkInput, err := testutil.ReadTestData("large.maml")
+	require.NoError(b, err)
+
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {

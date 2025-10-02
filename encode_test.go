@@ -2,19 +2,25 @@ package maml_test
 
 import (
 	"bytes"
-	_ "embed"
 	"encoding/json"
 	"testing"
 
 	"github.com/KimNorgaard/go-maml"
+	"github.com/KimNorgaard/go-maml/internal/testutil"
 )
 
-//go:embed testdata/large.json
-var benchmarkJSONInput []byte
-
-var benchmarkData any
+var (
+	benchmarkJSONInput []byte
+	benchmarkData      any
+)
 
 func init() {
+	var err error
+	benchmarkJSONInput, err = testutil.ReadTestData("large.json")
+	if err != nil {
+		panic("failed to read benchmark data for encoding benchmark: " + err.Error())
+	}
+
 	if err := json.Unmarshal(benchmarkJSONInput, &benchmarkData); err != nil {
 		panic("failed to unmarshal benchmark data for encoding benchmark: " + err.Error())
 	}
