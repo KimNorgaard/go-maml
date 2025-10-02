@@ -29,7 +29,7 @@ func TestNextToken(t *testing.T) {
 }
 `
 	expectedTokens := []struct {
-		expectedType    token.TokenType
+		expectedType    token.Type
 		expectedLiteral string
 		expectedLine    int
 		expectedColumn  int
@@ -186,7 +186,7 @@ func TestIdentifierAndNumberParsing(t *testing.T) {
 	tests := []struct {
 		name         string
 		input        string
-		expectedType token.TokenType
+		expectedType token.Type
 		expectedLit  string
 	}{
 		// These should be IDENTs
@@ -229,7 +229,7 @@ func TestControlCharacterValidation(t *testing.T) {
 		name          string
 		input         string
 		expectIllegal bool
-		expectedType  token.TokenType
+		expectedType  token.Type
 	}{
 		// Strings
 		{
@@ -331,7 +331,7 @@ func TestNewlineHandling(t *testing.T) {
 	tests := []struct {
 		name         string
 		input        string
-		expectedType token.TokenType
+		expectedType token.Type
 		expectedLit  string
 	}{
 		{"LF newline", "\n", token.NEWLINE, "\n"},

@@ -7,6 +7,7 @@ import (
 // Marshaler is the interface implemented by types that
 // can marshal themselves into valid MAML.
 type Marshaler interface {
+	// MarshalMAML returns the MAML encoding of the value.
 	MarshalMAML() ([]byte, error)
 }
 

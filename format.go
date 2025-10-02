@@ -92,57 +92,66 @@ func (f *formatter) writeNode(node ast.Node) error {
 	}
 }
 
-func (f *formatter) writeObject(obj *ast.ObjectLiteral) error {
-	if err := f.write("{"); err != nil {
-		return err
-	}
-
-	if len(obj.Pairs) == 0 {
-		return f.write("}")
-	}
-
-	if f.indent != "" { // Pretty-print mode
-		f.depth++
-		for i, pair := range obj.Pairs {
-			if err := f.write("\n"); err != nil {
-				return err
-			}
-			if err := f.writeIndent(); err != nil {
-				return err
-			}
-			if err := f.write(pair.Key.String() + ": "); err != nil {
-				return err
-			}
-			if err := f.writeNode(pair.Value); err != nil {
-				return err
-			}
-			if i < len(obj.Pairs)-1 {
-				if err := f.write(","); err != nil {
-					return err
-				}
-			}
-		}
-		f.depth--
+func (f *formatter) writePrettyObject(obj *ast.ObjectLiteral) error {
+	f.depth++
+	for i, pair := range obj.Pairs {
 		if err := f.write("\n"); err != nil {
 			return err
 		}
 		if err := f.writeIndent(); err != nil {
 			return err
 		}
-	} else { // Compact mode
-		for i, pair := range obj.Pairs {
-			if i > 0 {
-				if err := f.write(","); err != nil {
-					return err
-				}
-			}
-			if err := f.write(pair.Key.String()); err != nil {
+		if err := f.write(pair.Key.String() + ": "); err != nil {
+			return err
+		}
+		if err := f.writeNode(pair.Value); err != nil {
+			return err
+		}
+		if i < len(obj.Pairs)-1 {
+			if err := f.write(","); err != nil {
 				return err
 			}
-			if err := f.write(":"); err != nil {
+		}
+	}
+	f.depth--
+	if err := f.write("\n"); err != nil {
+		return err
+	}
+	return f.writeIndent()
+}
+
+func (f *formatter) writeCompactObject(obj *ast.ObjectLiteral) error {
+	for i, pair := range obj.Pairs {
+		if i > 0 {
+			if err := f.write(","); err != nil {
 				return err
 			}
-			if err := f.writeNode(pair.Value); err != nil {
+		}
+		if err := f.write(pair.Key.String()); err != nil {
+			return err
+		}
+		if err := f.write(":"); err != nil {
+			return err
+		}
+		if err := f.writeNode(pair.Value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (f *formatter) writeObject(obj *ast.ObjectLiteral) error {
+	if err := f.write("{"); err != nil {
+		return err
+	}
+
+	if len(obj.Pairs) > 0 {
+		if f.indent != "" {
+			if err := f.writePrettyObject(obj); err != nil {
+				return err
+			}
+		} else {
+			if err := f.writeCompactObject(obj); err != nil {
 				return err
 			}
 		}
@@ -151,48 +160,57 @@ func (f *formatter) writeObject(obj *ast.ObjectLiteral) error {
 	return f.write("}")
 }
 
-func (f *formatter) writeArray(arr *ast.ArrayLiteral) error {
-	if err := f.write("["); err != nil {
-		return err
-	}
-
-	if len(arr.Elements) == 0 {
-		return f.write("]")
-	}
-
-	if f.indent != "" { // Pretty-print mode
-		f.depth++
-		for i, elem := range arr.Elements {
-			if err := f.write("\n"); err != nil {
-				return err
-			}
-			if err := f.writeIndent(); err != nil {
-				return err
-			}
-			if err := f.writeNode(elem); err != nil {
-				return err
-			}
-			if i < len(arr.Elements)-1 {
-				if err := f.write(","); err != nil {
-					return err
-				}
-			}
-		}
-		f.depth--
+func (f *formatter) writePrettyArray(arr *ast.ArrayLiteral) error {
+	f.depth++
+	for i, elem := range arr.Elements {
 		if err := f.write("\n"); err != nil {
 			return err
 		}
 		if err := f.writeIndent(); err != nil {
 			return err
 		}
-	} else { // Compact mode
-		for i, elem := range arr.Elements {
-			if i > 0 {
-				if err := f.write(","); err != nil {
-					return err
-				}
+		if err := f.writeNode(elem); err != nil {
+			return err
+		}
+		if i < len(arr.Elements)-1 {
+			if err := f.write(","); err != nil {
+				return err
 			}
-			if err := f.writeNode(elem); err != nil {
+		}
+	}
+	f.depth--
+	if err := f.write("\n"); err != nil {
+		return err
+	}
+	return f.writeIndent()
+}
+
+func (f *formatter) writeCompactArray(arr *ast.ArrayLiteral) error {
+	for i, elem := range arr.Elements {
+		if i > 0 {
+			if err := f.write(","); err != nil {
+				return err
+			}
+		}
+		if err := f.writeNode(elem); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (f *formatter) writeArray(arr *ast.ArrayLiteral) error {
+	if err := f.write("["); err != nil {
+		return err
+	}
+
+	if len(arr.Elements) > 0 {
+		if f.indent != "" {
+			if err := f.writePrettyArray(arr); err != nil {
+				return err
+			}
+		} else {
+			if err := f.writeCompactArray(arr); err != nil {
 				return err
 			}
 		}

@@ -9,7 +9,7 @@ import (
 func TestLookupIdent(t *testing.T) {
 	tests := []struct {
 		input    string
-		expected TokenType
+		expected Type
 	}{
 		{"true", TRUE},
 		{"false", FALSE},

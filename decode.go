@@ -54,11 +54,11 @@ func (d *Decoder) Decode(out any) error {
 		return fmt.Errorf("maml: parsing error: %s", errStr)
 	}
 
-	return d.decode(doc, out)
+	return d.decodeDocument(doc, out)
 }
 
-// decode processes the options and maps the AST to a Go value.
-func (d *Decoder) decode(doc *ast.Document, v any) error {
+// decodeDocument processes the options and maps the AST to a Go value.
+func (d *Decoder) decodeDocument(doc *ast.Document, v any) error {
 	o := options{
 		maxDepth: defaultMaxDepth,
 	}
@@ -217,6 +217,35 @@ func (ds *decodeState) mapArray(a *ast.ArrayLiteral, rv reflect.Value) error {
 	return nil
 }
 
+// resolveMapKey extracts the string key from an AST node.
+func resolveMapKey(keyExpr ast.Expression) (string, error) {
+	switch k := keyExpr.(type) {
+	case *ast.Identifier:
+		return k.Value, nil
+	case *ast.StringLiteral:
+		return k.Value, nil
+	default:
+		return "", fmt.Errorf("maml: invalid key type in object literal: %T", keyExpr)
+	}
+}
+
+// findField finds the target field in a struct's cached fields.
+// It first attempts a case-sensitive match, then falls back to a
+// case-insensitive match.
+func findField(fields map[string]field, keyStr string) *field {
+	// Try a direct, case-sensitive match on the tag/field name.
+	if f, ok := fields[keyStr]; ok {
+		return &f
+	}
+	// Fallback to a case-insensitive match on all fields.
+	for name, f := range fields {
+		if strings.EqualFold(name, keyStr) {
+			return &f
+		}
+	}
+	return nil
+}
+
 func (ds *decodeState) mapMap(obj *ast.ObjectLiteral, rv reflect.Value) error {
 	mapType := rv.Type()
 	if mapType.Key().Kind() != reflect.String {
@@ -231,14 +260,9 @@ func (ds *decodeState) mapMap(obj *ast.ObjectLiteral, rv reflect.Value) error {
 	}
 	elemType := mapType.Elem()
 	for _, pair := range obj.Pairs {
-		var keyStr string
-		switch k := pair.Key.(type) {
-		case *ast.Identifier:
-			keyStr = k.Value
-		case *ast.StringLiteral:
-			keyStr = k.Value
-		default:
-			return fmt.Errorf("maml: invalid key type in object literal: %T", pair.Key)
+		keyStr, err := resolveMapKey(pair.Key)
+		if err != nil {
+			return err
 		}
 		newVal := reflect.New(elemType).Elem()
 		if err := ds.mapValue(pair.Value, newVal); err != nil {
@@ -252,31 +276,12 @@ func (ds *decodeState) mapMap(obj *ast.ObjectLiteral, rv reflect.Value) error {
 func (ds *decodeState) mapStruct(obj *ast.ObjectLiteral, rv reflect.Value) error {
 	fields := cachedFields(rv.Type())
 	for _, pair := range obj.Pairs {
-		var keyStr string
-		switch k := pair.Key.(type) {
-		case *ast.Identifier:
-			keyStr = k.Value
-		case *ast.StringLiteral:
-			keyStr = k.Value
-		default:
-			return fmt.Errorf("maml: invalid key type in object literal: %T", pair.Key)
+		keyStr, err := resolveMapKey(pair.Key)
+		if err != nil {
+			return err
 		}
 
-		var targetField *field
-		// Try a direct, case-sensitive match on the tag/field name.
-		if f, ok := fields[keyStr]; ok {
-			targetField = &f
-		} else {
-			// Fallback to a case-insensitive match on all fields.
-			for name, f := range fields {
-				if strings.EqualFold(name, keyStr) {
-					targetField = &f
-					break
-				}
-			}
-		}
-
-		if targetField != nil {
+		if targetField := findField(fields, keyStr); targetField != nil {
 			fieldVal := rv.FieldByIndex(targetField.idx)
 			if fieldVal.IsValid() && fieldVal.CanSet() {
 				if err := ds.mapValue(pair.Value, fieldVal); err != nil {
@@ -336,7 +341,9 @@ var fieldCache sync.Map // map[reflect.Type]map[string]field
 // The result is cached to avoid repeated reflection work.
 func cachedFields(t reflect.Type) map[string]field {
 	if f, ok := fieldCache.Load(t); ok {
-		return f.(map[string]field)
+		if fields, ok := f.(map[string]field); ok {
+			return fields
+		}
 	}
 
 	fields := make(map[string]field)

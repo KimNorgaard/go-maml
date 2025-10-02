@@ -26,12 +26,12 @@ func New(input []byte) *Lexer {
 }
 
 // NextToken scans the input and returns the next token.
-func (l *Lexer) NextToken() token.Token {
+func (l *Lexer) NextToken() token.Token { //nolint:gocognit
 	l.skipWhitespace()
 	tok := token.Token{Line: l.line, Column: l.column}
 	switch l.ch {
 	case '{', '}', '[', ']', ',', ':':
-		tok.Type = token.TokenType(l.ch)
+		tok.Type = token.Type(l.ch)
 		tok.Literal = string(l.ch)
 	case '\r':
 		if l.peekChar() == '\n' {
@@ -158,61 +158,106 @@ func (l *Lexer) readPotentialNumberOrIdentifier() string {
 	return string(l.input[startPos:l.position])
 }
 
+func consumeDigits(s string, i int) int {
+	for i < len(s) && isDigit(rune(s[i])) {
+		i++
+	}
+	return i
+}
+
+func parseIntegerPart(s string, i int) (newIndex int, ok bool) {
+	integerStart := i
+	i = consumeDigits(s, i)
+	if i == integerStart {
+		return i, false // No digits found.
+	}
+	integerPart := s[integerStart:i]
+	if len(integerPart) > 1 && integerPart[0] == '0' {
+		return i, false // Leading zeros are not allowed.
+	}
+	return i, true
+}
+
+func parseFractionalPart(s string, i int) (newIndex int, ok bool, isFloat bool) {
+	if i >= len(s) || s[i] != '.' {
+		return i, true, false
+	}
+	i++ // Consume '.'.
+	fractionStart := i
+	i = consumeDigits(s, i)
+	if i == fractionStart {
+		return i, false, true // No digits after '.'.
+	}
+	return i, true, true
+}
+
+func parseExponentPart(s string, i int) (newIndex int, ok bool, isFloat bool) {
+	if i >= len(s) || (s[i] != 'e' && s[i] != 'E') {
+		return i, true, false
+	}
+	i++ // Consume 'e' or 'E'.
+	if i < len(s) && (s[i] == '+' || s[i] == '-') {
+		i++
+	}
+	exponentStart := i
+	i = consumeDigits(s, i)
+	if i == exponentStart {
+		return i, false, true // No digits in exponent.
+	}
+	return i, true, true
+}
+
 // ParseAsNumber validates if a literal string conforms to the MAML number ABNF.
 // It is a pure function that does not modify the lexer state.
 //
 // Valid examples: "0", "-10", "1.23", "5e-10", "-0.5E+2"
 // Invalid examples: "01", "--1", "1.2.3", "5e-", "e10"
-func ParseAsNumber(s string) (token.TokenType, bool) {
+func ParseAsNumber(s string) (token.Type, bool) {
 	if len(s) == 0 {
 		return token.ILLEGAL, false
 	}
 	i, isFloat := 0, false
-	if i < len(s) && s[i] == '-' {
+
+	// Optional sign.
+	if s[i] == '-' {
 		if len(s) == 1 {
 			return token.ILLEGAL, false
 		}
 		i++
 	}
-	integerStart := i
-	for i < len(s) && isDigit(rune(s[i])) {
-		i++
-	}
-	if i == integerStart {
+
+	// Integer part.
+	var ok bool
+	i, ok = parseIntegerPart(s, i)
+	if !ok {
 		return token.ILLEGAL, false
 	}
-	integerPart := s[integerStart:i]
-	if len(integerPart) > 1 && integerPart[0] == '0' {
+
+	// Fractional part.
+	var fracIsFloat bool
+	i, ok, fracIsFloat = parseFractionalPart(s, i)
+	if !ok {
 		return token.ILLEGAL, false
 	}
-	if i < len(s) && s[i] == '.' {
+	if fracIsFloat {
 		isFloat = true
-		i++
-		fractionStart := i
-		for i < len(s) && isDigit(rune(s[i])) {
-			i++
-		}
-		if i == fractionStart {
-			return token.ILLEGAL, false
-		}
 	}
-	if i < len(s) && (s[i] == 'e' || s[i] == 'E') {
+
+	// Exponent part.
+	var expIsFloat bool
+	i, ok, expIsFloat = parseExponentPart(s, i)
+	if !ok {
+		return token.ILLEGAL, false
+	}
+	if expIsFloat {
 		isFloat = true
-		i++
-		if i < len(s) && (s[i] == '+' || s[i] == '-') {
-			i++
-		}
-		exponentStart := i
-		for i < len(s) && isDigit(rune(s[i])) {
-			i++
-		}
-		if i == exponentStart {
-			return token.ILLEGAL, false
-		}
 	}
+
+	// Must consume the whole string.
 	if i != len(s) {
 		return token.ILLEGAL, false
 	}
+
 	if isFloat {
 		return token.FLOAT, true
 	}
@@ -224,6 +269,25 @@ func (l *Lexer) readString() (string, bool) {
 		return l.readMultilineString()
 	}
 	return l.readSingleLineString()
+}
+
+func (l *Lexer) readEscapeSequence() (rune, bool, string) {
+	l.advance() // consume backslash
+	switch l.ch {
+	case 'b', 'f', 'n', 'r', 't', '"', '\\', '/':
+		return unescape(l.ch), true, ""
+	case 'u':
+		val, ok := l.readHex(4)
+		if !ok {
+			return 0, false, "invalid unicode escape"
+		}
+		if val >= 0xD800 && val <= 0xDFFF {
+			return 0, false, "invalid unicode scalar value (surrogate pair)"
+		}
+		return val, true, ""
+	default:
+		return 0, false, fmt.Sprintf("invalid escape sequence \\%c", l.ch)
+	}
 }
 
 func (l *Lexer) readSingleLineString() (string, bool) {
@@ -241,22 +305,11 @@ func (l *Lexer) readSingleLineString() (string, bool) {
 			return "invalid utf-8 sequence in string", false
 		}
 		if l.ch == '\\' {
-			l.advance()
-			switch l.ch {
-			case 'b', 'f', 'n', 'r', 't', '"', '\\', '/':
-				buf.WriteRune(unescape(l.ch))
-			case 'u':
-				val, ok := l.readHex(4)
-				if !ok {
-					return "invalid unicode escape", false
-				}
-				if val >= 0xD800 && val <= 0xDFFF {
-					return "invalid unicode scalar value (surrogate pair)", false
-				}
-				buf.WriteRune(val)
-			default:
-				return fmt.Sprintf("invalid escape sequence \\%c", l.ch), false
+			r, ok, errMsg := l.readEscapeSequence()
+			if !ok {
+				return errMsg, false
 			}
+			buf.WriteRune(r)
 		} else {
 			if isForbiddenControlChar(l.ch) {
 				return fmt.Sprintf("forbidden control character U+%04X in string", l.ch), false
@@ -301,13 +354,14 @@ func (l *Lexer) readHex(n int) (rune, bool) {
 	for range n {
 		l.advance()
 		var d rune
-		if '0' <= l.ch && l.ch <= '9' {
+		switch {
+		case '0' <= l.ch && l.ch <= '9':
 			d = l.ch - '0'
-		} else if 'a' <= l.ch && l.ch <= 'f' {
+		case 'a' <= l.ch && l.ch <= 'f':
 			d = l.ch - 'a' + 10
-		} else if 'A' <= l.ch && l.ch <= 'F' {
+		case 'A' <= l.ch && l.ch <= 'F':
 			d = l.ch - 'A' + 10
-		} else {
+		default:
 			return 0, false
 		}
 		val = val*16 + d

@@ -20,7 +20,7 @@ type Parser struct {
 	curToken  token.Token
 	peekToken token.Token
 
-	prefixParseFns map[token.TokenType]prefixParseFn
+	prefixParseFns map[token.Type]prefixParseFn
 }
 
 // New creates a new parser.
@@ -30,7 +30,7 @@ func New(l *lexer.Lexer) *Parser {
 		errors: []string{},
 	}
 
-	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
+	p.prefixParseFns = make(map[token.Type]prefixParseFn)
 	p.registerPrefix(token.IDENT, p.parseIdentifier)
 	p.registerPrefix(token.INT, p.parseIntegerLiteral)
 	p.registerPrefix(token.FLOAT, p.parseFloatLiteral)
@@ -189,7 +189,7 @@ func (p *Parser) parseArrayLiteral() ast.Expression {
 	return array
 }
 
-func (p *Parser) parseExpressionList(end token.TokenType) []ast.Expression {
+func (p *Parser) parseExpressionList(end token.Type) []ast.Expression {
 	list := []ast.Expression{}
 	p.skip(token.NEWLINE)
 	if p.curTokenIs(end) {
@@ -287,9 +287,9 @@ func (p *Parser) parseObjectKey() ast.Expression {
 	return key
 }
 
-func (p *Parser) skip(types ...token.TokenType) {
+func (p *Parser) skip(types ...token.Type) {
 	for {
-		if found := slices.ContainsFunc(types, func(t token.TokenType) bool {
+		if found := slices.ContainsFunc(types, func(t token.Type) bool {
 			return p.curTokenIs(t)
 		}); !found {
 			break
@@ -298,15 +298,15 @@ func (p *Parser) skip(types ...token.TokenType) {
 	}
 }
 
-func (p *Parser) registerPrefix(tokenType token.TokenType, fn prefixParseFn) {
+func (p *Parser) registerPrefix(tokenType token.Type, fn prefixParseFn) {
 	p.prefixParseFns[tokenType] = fn
 }
 
-func (p *Parser) noPrefixParseFnError(t token.TokenType) {
+func (p *Parser) noPrefixParseFnError(t token.Type) {
 	msg := fmt.Sprintf("no prefix parse function for %s ('%s') found", t, p.curToken.Literal)
 	p.errors = append(p.errors, msg)
 }
 
-func (p *Parser) curTokenIs(t token.TokenType) bool {
+func (p *Parser) curTokenIs(t token.Type) bool {
 	return p.curToken.Type == t
 }

@@ -121,7 +121,7 @@ func isEmptyValue(v reflect.Value) bool {
 	return false
 }
 
-func (e *encodeState) marshalValue(v reflect.Value) (ast.Node, error) {
+func (e *encodeState) marshalValue(v reflect.Value) (ast.Node, error) { //nolint:gocyclo
 	if !v.IsValid() {
 		return &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
 	}
@@ -149,80 +149,93 @@ func (e *encodeState) marshalValue(v reflect.Value) (ast.Node, error) {
 
 	switch v.Kind() {
 	case reflect.Pointer:
-		if v.IsNil() {
-			return &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
-		}
-		ptr := v.Pointer()
-		if _, ok := e.seen[ptr]; ok {
-			return nil, fmt.Errorf("maml: encountered a cycle via type %s", v.Type())
-		}
-		e.seen[ptr] = struct{}{}
-		result, err := e.marshalValue(v.Elem())
-		delete(e.seen, ptr)
-		return result, err
-
+		return e.marshalPointer(v)
 	case reflect.Interface:
-		if v.IsNil() {
+		return e.marshalInterface(v)
+	case reflect.String:
+		return e.marshalString(v)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return e.marshalInt(v)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return e.marshalUint(v)
+	case reflect.Float32, reflect.Float64:
+		return e.marshalFloat(v)
+	case reflect.Bool:
+		return e.marshalBool(v)
+	case reflect.Slice, reflect.Array:
+		return e.marshalSlice(v)
+	case reflect.Map:
+		return e.marshalMap(v)
+	case reflect.Struct:
+		return e.marshalStruct(v)
+	default:
+		// nil can be a valid value for some kinds (e.g. chan, func, map, ptr, slice)
+		if !v.IsValid() || v.IsZero() {
 			return &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
 		}
-		return e.marshalValue(v.Elem())
+		return nil, fmt.Errorf("maml: unsupported type for marshaling: %s", v.Type())
+	}
+}
 
-	case reflect.String:
-		lit := v.String()
-		return &ast.StringLiteral{Token: token.Token{Type: token.STRING, Literal: lit}, Value: lit}, nil
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		val := v.Int()
-		lit := fmt.Sprintf("%d", val)
-		return &ast.IntegerLiteral{Token: token.Token{Type: token.INT, Literal: lit}, Value: val}, nil
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		val := v.Uint()
-		if val > math.MaxInt64 {
-			return nil, fmt.Errorf("maml: cannot marshal uint64 %d into MAML (overflows int64)", val)
-		}
-		lit := fmt.Sprintf("%d", val)
-		return &ast.IntegerLiteral{Token: token.Token{Type: token.INT, Literal: lit}, Value: int64(val)}, nil
-	case reflect.Float32, reflect.Float64:
-		val := v.Float()
-		lit := fmt.Sprintf("%g", val)
-		return &ast.FloatLiteral{Token: token.Token{Type: token.FLOAT, Literal: lit}, Value: val}, nil
-	case reflect.Bool:
-		val := v.Bool()
-		lit := fmt.Sprintf("%t", val)
-		tokType := token.FALSE
-		if val {
-			tokType = token.TRUE
-		}
-		return &ast.BooleanLiteral{Token: token.Token{Type: tokType, Literal: lit}, Value: val}, nil
-	case reflect.Slice, reflect.Array:
-		if v.Kind() == reflect.Slice {
-			if v.IsNil() {
-				return &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
-			}
-			ptr := v.Pointer()
-			if _, ok := e.seen[ptr]; ok {
-				return nil, fmt.Errorf("maml: encountered a cycle via type %s", v.Type())
-			}
-			e.seen[ptr] = struct{}{}
-			defer delete(e.seen, ptr)
-		}
+func (e *encodeState) marshalPointer(v reflect.Value) (ast.Node, error) {
+	if v.IsNil() {
+		return &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
+	}
+	ptr := v.Pointer()
+	if _, ok := e.seen[ptr]; ok {
+		return nil, fmt.Errorf("maml: encountered a cycle via type %s", v.Type())
+	}
+	e.seen[ptr] = struct{}{}
+	result, err := e.marshalValue(v.Elem())
+	delete(e.seen, ptr)
+	return result, err
+}
 
-		elements := make([]ast.Expression, v.Len())
-		for i := 0; i < v.Len(); i++ {
-			elemNode, err := e.marshalValue(v.Index(i))
-			if err != nil {
-				return nil, err
-			}
-			elemExpr, ok := elemNode.(ast.Expression)
-			if !ok {
-				return nil, fmt.Errorf("maml: marshaled element is not an expression")
-			}
-			elements[i] = elemExpr
-		}
-		return &ast.ArrayLiteral{
-			Token:    token.Token{Type: token.LBRACK, Literal: "["},
-			Elements: elements,
-		}, nil
-	case reflect.Map:
+func (e *encodeState) marshalInterface(v reflect.Value) (ast.Node, error) {
+	if v.IsNil() {
+		return &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
+	}
+	return e.marshalValue(v.Elem())
+}
+
+func (e *encodeState) marshalString(v reflect.Value) (ast.Node, error) {
+	lit := v.String()
+	return &ast.StringLiteral{Token: token.Token{Type: token.STRING, Literal: lit}, Value: lit}, nil
+}
+
+func (e *encodeState) marshalInt(v reflect.Value) (ast.Node, error) {
+	val := v.Int()
+	lit := fmt.Sprintf("%d", val)
+	return &ast.IntegerLiteral{Token: token.Token{Type: token.INT, Literal: lit}, Value: val}, nil
+}
+
+func (e *encodeState) marshalUint(v reflect.Value) (ast.Node, error) {
+	val := v.Uint()
+	if val > math.MaxInt64 {
+		return nil, fmt.Errorf("maml: cannot marshal uint64 %d into MAML (overflows int64)", val)
+	}
+	lit := fmt.Sprintf("%d", val)
+	return &ast.IntegerLiteral{Token: token.Token{Type: token.INT, Literal: lit}, Value: int64(val)}, nil
+}
+
+func (e *encodeState) marshalFloat(v reflect.Value) (ast.Node, error) {
+	val := v.Float()
+	lit := fmt.Sprintf("%g", val)
+	return &ast.FloatLiteral{Token: token.Token{Type: token.FLOAT, Literal: lit}, Value: val}, nil
+}
+
+func (e *encodeState) marshalBool(v reflect.Value) (ast.Node, error) {
+	val := v.Bool()
+	lit := fmt.Sprintf("%t", val)
+	tokType := token.FALSE
+	if val {
+		tokType = token.TRUE
+	}
+	return &ast.BooleanLiteral{Token: token.Token{Type: tokType, Literal: lit}, Value: val}, nil
+}
+
+func (e *encodeState) marshalSlice(v reflect.Value) (ast.Node, error) {
+	if v.Kind() == reflect.Slice {
 		if v.IsNil() {
 			return &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
 		}
@@ -232,103 +245,128 @@ func (e *encodeState) marshalValue(v reflect.Value) (ast.Node, error) {
 		}
 		e.seen[ptr] = struct{}{}
 		defer delete(e.seen, ptr)
-
-		if v.Type().Key().Kind() != reflect.String {
-			return nil, fmt.Errorf("maml: map key type must be a string, got %s", v.Type().Key())
-		}
-
-		pairs := make([]*ast.KeyValueExpression, 0, v.Len())
-		keys := v.MapKeys()
-		sort.Slice(keys, func(i, j int) bool {
-			return keys[i].String() < keys[j].String()
-		})
-		for _, key := range keys {
-			value := v.MapIndex(key)
-
-			valueNode, err := e.marshalValue(value)
-			if err != nil {
-				return nil, err
-			}
-			valueExpr, ok := valueNode.(ast.Expression)
-			if !ok {
-				return nil, fmt.Errorf("maml: marshaled map value is not an expression")
-			}
-
-			keyStr := key.String()
-			keyIdent := &ast.Identifier{
-				Token: token.Token{Type: token.IDENT, Literal: keyStr},
-				Value: keyStr,
-			}
-
-			pairs = append(pairs, &ast.KeyValueExpression{
-				Token: token.Token{Type: token.COLON, Literal: ":"},
-				Key:   keyIdent,
-				Value: valueExpr,
-			})
-		}
-
-		return &ast.ObjectLiteral{
-			Token: token.Token{Type: token.LBRACE, Literal: "{"},
-			Pairs: pairs,
-		}, nil
-	case reflect.Struct:
-		pairs := make([]*ast.KeyValueExpression, 0, v.NumField())
-		t := v.Type()
-
-		for i := 0; i < v.NumField(); i++ {
-			field := t.Field(i)
-			fieldValue := v.Field(i)
-
-			if !field.IsExported() {
-				continue
-			}
-
-			tagStr := field.Tag.Get("maml")
-			tagName, opts := parseTag(tagStr)
-
-			if tagName == "-" {
-				continue
-			}
-
-			if opts["omitempty"] && isEmptyValue(fieldValue) {
-				continue
-			}
-
-			keyStr := field.Name
-			if tagName != "" {
-				keyStr = tagName
-			}
-
-			valueNode, err := e.marshalValue(fieldValue)
-			if err != nil {
-				return nil, err
-			}
-			valueExpr, ok := valueNode.(ast.Expression)
-			if !ok {
-				return nil, fmt.Errorf("maml: marshaled struct field value is not an expression")
-			}
-
-			keyIdent := &ast.Identifier{
-				Token: token.Token{Type: token.IDENT, Literal: keyStr},
-				Value: keyStr,
-			}
-
-			pairs = append(pairs, &ast.KeyValueExpression{
-				Token: token.Token{Type: token.COLON, Literal: ":"},
-				Key:   keyIdent,
-				Value: valueExpr,
-			})
-		}
-
-		return &ast.ObjectLiteral{
-			Token: token.Token{Type: token.LBRACE, Literal: "{"},
-			Pairs: pairs,
-		}, nil
-	default:
-		// nil can be a valid value for some kinds (e.g. chan, func, map, ptr, slice)
-		if !v.IsValid() || v.IsZero() {
-			return &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
-		}
-		return nil, fmt.Errorf("maml: unsupported type for marshaling: %s", v.Type())
 	}
+
+	elements := make([]ast.Expression, v.Len())
+	for i := 0; i < v.Len(); i++ {
+		elemNode, err := e.marshalValue(v.Index(i))
+		if err != nil {
+			return nil, err
+		}
+		elemExpr, ok := elemNode.(ast.Expression)
+		if !ok {
+			return nil, fmt.Errorf("maml: marshaled element is not an expression")
+		}
+		elements[i] = elemExpr
+	}
+	return &ast.ArrayLiteral{
+		Token:    token.Token{Type: token.LBRACK, Literal: "["},
+		Elements: elements,
+	}, nil
+}
+
+func (e *encodeState) marshalMap(v reflect.Value) (ast.Node, error) {
+	if v.IsNil() {
+		return &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
+	}
+	ptr := v.Pointer()
+	if _, ok := e.seen[ptr]; ok {
+		return nil, fmt.Errorf("maml: encountered a cycle via type %s", v.Type())
+	}
+	e.seen[ptr] = struct{}{}
+	defer delete(e.seen, ptr)
+
+	if v.Type().Key().Kind() != reflect.String {
+		return nil, fmt.Errorf("maml: map key type must be a string, got %s", v.Type().Key())
+	}
+
+	pairs := make([]*ast.KeyValueExpression, 0, v.Len())
+	keys := v.MapKeys()
+	sort.Slice(keys, func(i, j int) bool {
+		return keys[i].String() < keys[j].String()
+	})
+	for _, key := range keys {
+		value := v.MapIndex(key)
+
+		valueNode, err := e.marshalValue(value)
+		if err != nil {
+			return nil, err
+		}
+		valueExpr, ok := valueNode.(ast.Expression)
+		if !ok {
+			return nil, fmt.Errorf("maml: marshaled map value is not an expression")
+		}
+
+		keyStr := key.String()
+		keyIdent := &ast.Identifier{
+			Token: token.Token{Type: token.IDENT, Literal: keyStr},
+			Value: keyStr,
+		}
+
+		pairs = append(pairs, &ast.KeyValueExpression{
+			Token: token.Token{Type: token.COLON, Literal: ":"},
+			Key:   keyIdent,
+			Value: valueExpr,
+		})
+	}
+
+	return &ast.ObjectLiteral{
+		Token: token.Token{Type: token.LBRACE, Literal: "{"},
+		Pairs: pairs,
+	}, nil
+}
+
+func (e *encodeState) marshalStruct(v reflect.Value) (ast.Node, error) {
+	pairs := make([]*ast.KeyValueExpression, 0, v.NumField())
+	t := v.Type()
+
+	for i := 0; i < v.NumField(); i++ {
+		field := t.Field(i)
+		fieldValue := v.Field(i)
+
+		if !field.IsExported() {
+			continue
+		}
+
+		tagStr := field.Tag.Get("maml")
+		tagName, opts := parseTag(tagStr)
+
+		if tagName == "-" {
+			continue
+		}
+
+		if opts["omitempty"] && isEmptyValue(fieldValue) {
+			continue
+		}
+
+		keyStr := field.Name
+		if tagName != "" {
+			keyStr = tagName
+		}
+
+		valueNode, err := e.marshalValue(fieldValue)
+		if err != nil {
+			return nil, err
+		}
+		valueExpr, ok := valueNode.(ast.Expression)
+		if !ok {
+			return nil, fmt.Errorf("maml: marshaled struct field value is not an expression")
+		}
+
+		keyIdent := &ast.Identifier{
+			Token: token.Token{Type: token.IDENT, Literal: keyStr},
+			Value: keyStr,
+		}
+
+		pairs = append(pairs, &ast.KeyValueExpression{
+			Token: token.Token{Type: token.COLON, Literal: ":"},
+			Key:   keyIdent,
+			Value: valueExpr,
+		})
+	}
+
+	return &ast.ObjectLiteral{
+		Token: token.Token{Type: token.LBRACE, Literal: "{"},
+		Pairs: pairs,
+	}, nil
 }
