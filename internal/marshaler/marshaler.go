@@ -29,6 +29,28 @@ func parseTag(tag string) (string, map[string]bool) {
 	return name, options
 }
 
+// isEmptyValue reports whether the value v is empty.
+// It is equivalent to the `encoding/json` definition of empty:
+// false, 0, a nil pointer, a nil interface value, and any empty array,
+// slice, map, or string.
+func isEmptyValue(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
+		return v.Len() == 0
+	case reflect.Bool:
+		return !v.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return v.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return v.Float() == 0
+	case reflect.Interface, reflect.Pointer:
+		return v.IsNil()
+	}
+	return false
+}
+
 func (m *marshaler) marshal(v reflect.Value) (ast.Node, error) {
 	// Follow pointers and interfaces to find the concrete value.
 	for v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface {
@@ -141,9 +163,13 @@ func (m *marshaler) marshal(v reflect.Value) (ast.Node, error) {
 			}
 
 			tagStr := field.Tag.Get("maml")
-			tagName, _ := parseTag(tagStr) // options not used yet
+			tagName, opts := parseTag(tagStr)
 
 			if tagName == "-" {
+				continue
+			}
+
+			if opts["omitempty"] && isEmptyValue(fieldValue) {
 				continue
 			}
 

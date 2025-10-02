@@ -244,3 +244,66 @@ func TestMarshal_Pointers(t *testing.T) {
 		require.Equal(t, int64(10), val.Value)
 	})
 }
+
+func TestMarshal_Struct_OmitEmpty(t *testing.T) {
+	type omitStruct struct {
+		Name    string   `maml:"name"`
+		Age     int      `maml:"age,omitempty"`
+		IsAdmin bool     `maml:"isAdmin,omitempty"`
+		Tags    []string `maml:"tags,omitempty"`
+		Notes   *string  `maml:"notes,omitempty"`
+	}
+
+	t.Run("Fields with zero values are omitted", func(t *testing.T) {
+		s := omitStruct{
+			Name: "John Doe", // Not empty, should be present
+			// Age is 0, IsAdmin is false, Tags is nil, Notes is nil
+		}
+
+		node, err := marshaler.Marshal(s)
+		require.NoError(t, err)
+
+		obj, ok := node.(*ast.ObjectLiteral)
+		require.True(t, ok)
+
+		foundKeys := make(map[string]bool)
+		for _, pair := range obj.Pairs {
+			foundKeys[pair.Key.String()] = true
+		}
+
+		require.Len(t, foundKeys, 1)
+		require.True(t, foundKeys["name"])
+	})
+
+	t.Run("Fields with non-zero values are included", func(t *testing.T) {
+		notes := "important"
+		s := omitStruct{
+			Name:    "Jane Doe",
+			Age:     30,
+			IsAdmin: true,
+			Tags:    []string{"a"},
+			Notes:   &notes,
+		}
+
+		node, err := marshaler.Marshal(s)
+		require.NoError(t, err)
+
+		obj, ok := node.(*ast.ObjectLiteral)
+		require.True(t, ok)
+		require.Len(t, obj.Pairs, 5) // All fields should be present
+	})
+
+	t.Run("False boolean is omitted", func(t *testing.T) {
+		s := omitStruct{
+			Name:    "Admin Test",
+			IsAdmin: false,
+		}
+
+		node, err := marshaler.Marshal(s)
+		require.NoError(t, err)
+		obj, ok := node.(*ast.ObjectLiteral)
+		require.True(t, ok)
+		require.Len(t, obj.Pairs, 1)
+		require.Equal(t, "name", obj.Pairs[0].Key.String())
+	})
+}
