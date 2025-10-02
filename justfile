@@ -30,6 +30,9 @@ gen:
 test:
 	{{TEST_FLAGS}} go test -v ./...
 
+fuzz:
+    {{TEST_FLAGS}} go test -fuzz=Fuzz -fuzztime 60s
+
 # Run tests showing coverage
 test-coverage:
 	{{TEST_FLAGS}} go test -cover -v ./...
