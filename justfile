@@ -39,8 +39,8 @@ test-coverage:
 
 # Generate test coverage report
 coverage:
-	{{TEST_FLAGS}} go test -coverprofile=coverage.out ./...
-	go tool cover -html=coverage.out -o coverage.html
+	{{TEST_FLAGS}} go test -coverprofile=coverage.txt ./...
+	go tool cover -html=coverage.txt -o coverage.html
 
 # Run tests with race detector
 test-race:
@@ -52,7 +52,7 @@ fmt:
 
 # Clean build artifacts
 clean:
-	rm -f coverage.out coverage.html
+	rm -f coverage.txt coverage.html
 	go clean
 
 # Vet go code

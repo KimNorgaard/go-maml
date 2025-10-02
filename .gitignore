@@ -4,6 +4,6 @@
 .vscode
 go.work
 go.work.sum
-*.out
+coverage.txt
 .env
 .envrc

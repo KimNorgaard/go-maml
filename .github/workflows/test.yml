@@ -64,3 +64,26 @@ jobs:
 
       - name: Run govulncheck
         uses: golang/govulncheck-action@v1
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+          cache: true
+
+      - name: Check out code
+        uses: actions/checkout@v5
+
+      - name: Run coverage
+        run: |
+          go test -coverprofile=coverage.txt ./...
+
+      - uses: codecov/codecov-action@v5
+        with:
+          fail_ci_if_error: true
+          verbose: true
+          token: ${{ secrets.CODECOV_TOKEN }}
