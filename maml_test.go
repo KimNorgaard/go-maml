@@ -140,3 +140,64 @@ func TestMarshal_CustomMarshaler(t *testing.T) {
 		require.Equal(t, "null", string(b))
 	})
 }
+
+// Helper types for cycle detection tests
+type NodeA struct {
+	B *NodeB
+}
+type NodeB struct {
+	A *NodeA
+}
+
+func TestMarshal_CycleDetection(t *testing.T) {
+	t.Run("Pointer to self", func(t *testing.T) {
+		type Node struct {
+			Next *Node
+		}
+		var n Node
+		n.Next = &n
+		_, err := maml.Marshal(n)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "encountered a cycle")
+	})
+
+	t.Run("Map containing self", func(t *testing.T) {
+		m := make(map[string]any)
+		m["self"] = m
+		_, err := maml.Marshal(m)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "encountered a cycle")
+	})
+
+	t.Run("Slice containing self", func(t *testing.T) {
+		s := make([]any, 1)
+		s[0] = s
+		_, err := maml.Marshal(s)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "encountered a cycle")
+	})
+
+	t.Run("Struct with two fields pointing to the same object (valid)", func(t *testing.T) {
+		type Child struct{ Name string }
+		type Parent struct {
+			A *Child
+			B *Child
+		}
+		c := &Child{Name: "Shared"}
+		p := Parent{A: c, B: c}
+		b, err := maml.Marshal(p, maml.Indent(0))
+		require.NoError(t, err)
+		// Field order not guaranteed
+		require.Contains(t, string(b), `A: { Name: "Shared" }`)
+		require.Contains(t, string(b), `B: { Name: "Shared" }`)
+	})
+
+	t.Run("Indirect cycle through multiple structs", func(t *testing.T) {
+		a := &NodeA{}
+		b := &NodeB{A: a}
+		a.B = b
+		_, err := maml.Marshal(a)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "encountered a cycle")
+	})
+}

@@ -33,7 +33,7 @@ func (e *Encoder) Encode(v any) error {
 		}
 	}
 
-	es := &encodeState{}
+	es := &encodeState{seen: make(map[uintptr]struct{})}
 	node, err := es.marshalValue(reflect.ValueOf(v))
 	if err != nil {
 		return fmt.Errorf("maml: %w", err)
@@ -44,7 +44,8 @@ func (e *Encoder) Encode(v any) error {
 }
 
 type encodeState struct {
-	// Future state like depth counters can be added here.
+	// Keep track of pointers seen so far.
+	seen map[uintptr]struct{}
 }
 
 func (e *encodeState) marshalCustom(v reflect.Value, u Marshaler) (ast.Node, error) {
@@ -113,21 +114,18 @@ func isEmptyValue(v reflect.Value) bool {
 		return v.Uint() == 0
 	case reflect.Float32, reflect.Float64:
 		return v.Float() == 0
-	case reflect.Interface, reflect.Ptr:
+	case reflect.Interface, reflect.Pointer:
 		return v.IsNil()
 	}
 	return false
 }
 
 func (e *encodeState) marshalValue(v reflect.Value) (ast.Node, error) {
-	// Handle nil interfaces explicitly to avoid panics.
-	if !v.IsValid() || (v.Kind() == reflect.Interface && v.IsNil()) {
+	if !v.IsValid() {
 		return &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
 	}
 
-	// Check for custom Marshaler implementation.
-	// We must check the value itself and a pointer to the value,
-	// to handle both value and pointer receivers.
+	// Check for custom Marshaler implementation first.
 	if v.Type().NumMethod() > 0 && v.CanInterface() {
 		if u, ok := v.Interface().(Marshaler); ok {
 			return e.marshalCustom(v, u)
@@ -138,8 +136,6 @@ func (e *encodeState) marshalValue(v reflect.Value) (ast.Node, error) {
 		if v.CanAddr() {
 			pv = v.Addr()
 		} else {
-			// For non-addressable values (like struct literals),
-			// create a pointer to a copy to check for the interface.
 			pv = reflect.New(v.Type())
 			pv.Elem().Set(v)
 		}
@@ -150,15 +146,26 @@ func (e *encodeState) marshalValue(v reflect.Value) (ast.Node, error) {
 		}
 	}
 
-	// Follow pointers and interfaces to find the concrete value.
-	for v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface {
+	switch v.Kind() {
+	case reflect.Pointer:
 		if v.IsNil() {
 			return &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
 		}
-		v = v.Elem()
-	}
+		ptr := v.Pointer()
+		if _, ok := e.seen[ptr]; ok {
+			return nil, fmt.Errorf("maml: encountered a cycle via type %s", v.Type())
+		}
+		e.seen[ptr] = struct{}{}
+		result, err := e.marshalValue(v.Elem())
+		delete(e.seen, ptr)
+		return result, err
 
-	switch v.Kind() {
+	case reflect.Interface:
+		if v.IsNil() {
+			return &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
+		}
+		return e.marshalValue(v.Elem())
+
 	case reflect.String:
 		lit := v.String()
 		return &ast.StringLiteral{Token: token.Token{Type: token.STRING, Literal: lit}, Value: lit}, nil
@@ -186,8 +193,16 @@ func (e *encodeState) marshalValue(v reflect.Value) (ast.Node, error) {
 		}
 		return &ast.BooleanLiteral{Token: token.Token{Type: tokType, Literal: lit}, Value: val}, nil
 	case reflect.Slice, reflect.Array:
-		if v.Kind() == reflect.Slice && v.IsNil() {
-			return &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
+		if v.Kind() == reflect.Slice {
+			if v.IsNil() {
+				return &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
+			}
+			ptr := v.Pointer()
+			if _, ok := e.seen[ptr]; ok {
+				return nil, fmt.Errorf("maml: encountered a cycle via type %s", v.Type())
+			}
+			e.seen[ptr] = struct{}{}
+			defer delete(e.seen, ptr)
 		}
 
 		elements := make([]ast.Expression, v.Len())
@@ -210,6 +225,12 @@ func (e *encodeState) marshalValue(v reflect.Value) (ast.Node, error) {
 		if v.IsNil() {
 			return &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
 		}
+		ptr := v.Pointer()
+		if _, ok := e.seen[ptr]; ok {
+			return nil, fmt.Errorf("maml: encountered a cycle via type %s", v.Type())
+		}
+		e.seen[ptr] = struct{}{}
+		defer delete(e.seen, ptr)
 
 		if v.Type().Key().Kind() != reflect.String {
 			return nil, fmt.Errorf("maml: map key type must be a string, got %s", v.Type().Key())
