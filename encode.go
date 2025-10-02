@@ -21,17 +21,18 @@ func NewEncoder(w io.Writer, opts ...Option) *Encoder {
 
 // Encode writes the MAML encoding of v to the stream.
 func (e *Encoder) Encode(v any) error {
-	// TODO: Process options from e.opts here before marshaling.
-	// For example, passing them to the marshaler if needed.
+	o := options{}
+	for _, opt := range e.opts {
+		if err := opt(&o); err != nil {
+			return err
+		}
+	}
 
 	node, err := marshaler.Marshal(v)
 	if err != nil {
 		return fmt.Errorf("maml: %w", err)
 	}
 
-	// TODO: Process options from e.opts here before formatting.
-	// For example, passing them to the formatter.
-
-	f := formatter.New(e.w)
+	f := formatter.New(e.w, o.indent)
 	return f.Format(node)
 }

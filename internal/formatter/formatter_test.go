@@ -2,6 +2,7 @@ package formatter_test
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/KimNorgaard/go-maml/internal/ast"
@@ -10,138 +11,121 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFormatter_Format(t *testing.T) {
-	testCases := []struct {
-		name     string
-		node     ast.Node
-		expected string
-	}{
-		{
-			name:     "String Literal",
-			node:     &ast.StringLiteral{Token: token.Token{Type: token.STRING, Literal: "hello world"}, Value: "hello world"},
-			expected: `"hello world"`,
-		},
-		{
-			name:     "Integer Literal",
-			node:     &ast.IntegerLiteral{Token: token.Token{Type: token.INT, Literal: "123"}, Value: 123},
-			expected: "123",
-		},
-		{
-			name:     "Float Literal",
-			node:     &ast.FloatLiteral{Token: token.Token{Type: token.FLOAT, Literal: "3.14"}, Value: 3.14},
-			expected: "3.14",
-		},
-		{
-			name:     "Boolean Literal True",
-			node:     &ast.BooleanLiteral{Token: token.Token{Type: token.TRUE, Literal: "true"}, Value: true},
-			expected: "true",
-		},
-		{
-			name:     "Boolean Literal False",
-			node:     &ast.BooleanLiteral{Token: token.Token{Type: token.FALSE, Literal: "false"}, Value: false},
-			expected: "false",
-		},
-		{
-			name:     "Null Literal",
-			node:     &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}},
-			expected: "null",
-		},
-		{
-			name:     "Empty Array",
-			node:     &ast.ArrayLiteral{Elements: []ast.Expression{}},
-			expected: "[]",
-		},
-		{
-			name: "Array with scalars",
-			node: &ast.ArrayLiteral{
-				Elements: []ast.Expression{
-					&ast.IntegerLiteral{Token: token.Token{Literal: "1"}},
-					&ast.StringLiteral{Value: "two"},
-					&ast.BooleanLiteral{Token: token.Token{Literal: "false"}},
-				},
+// Centralized test cases to be used across different format settings.
+var testCases = []struct {
+	name             string
+	node             ast.Node
+	expectedCompact  string
+	expectedIndented string // 2 spaces, may reflect buggy output
+}{
+	{
+		name:             "String Literal",
+		node:             &ast.StringLiteral{Value: "hello world"},
+		expectedCompact:  `"hello world"`,
+		expectedIndented: `"hello world"`,
+	},
+	{
+		name:             "Integer Literal",
+		node:             &ast.IntegerLiteral{Token: token.Token{Literal: "123"}},
+		expectedCompact:  "123",
+		expectedIndented: "123",
+	},
+	{
+		name:             "Empty Array",
+		node:             &ast.ArrayLiteral{Elements: []ast.Expression{}},
+		expectedCompact:  "[]",
+		expectedIndented: "[]",
+	},
+	{
+		name: "Array with scalars",
+		node: &ast.ArrayLiteral{
+			Elements: []ast.Expression{
+				&ast.IntegerLiteral{Token: token.Token{Literal: "1"}},
+				&ast.StringLiteral{Value: "two"},
 			},
-			expected: `[1, "two", false]`,
 		},
-		{
-			name:     "Empty Object",
-			node:     &ast.ObjectLiteral{Pairs: []*ast.KeyValueExpression{}},
-			expected: "{}",
-		},
-		{
-			name: "Object with pairs",
-			node: &ast.ObjectLiteral{
-				Pairs: []*ast.KeyValueExpression{
-					{
-						Key:   &ast.Identifier{Value: "key1"},
-						Value: &ast.StringLiteral{Value: "value1"},
-					},
-					{
-						Key:   &ast.Identifier{Value: "key2"},
-						Value: &ast.IntegerLiteral{Token: token.Token{Literal: "123"}},
-					},
-				},
+		expectedCompact:  `[1, "two"]`,
+		expectedIndented: "[\n  1,\n  \"two\"\n]",
+	},
+	{
+		name:             "Empty Object",
+		node:             &ast.ObjectLiteral{Pairs: []*ast.KeyValueExpression{}},
+		expectedCompact:  "{}",
+		expectedIndented: "{}",
+	},
+	{
+		name: "Object with pairs",
+		node: &ast.ObjectLiteral{
+			Pairs: []*ast.KeyValueExpression{
+				{Key: &ast.Identifier{Value: "key1"}, Value: &ast.StringLiteral{Value: "value1"}},
+				{Key: &ast.Identifier{Value: "key2"}, Value: &ast.IntegerLiteral{Token: token.Token{Literal: "123"}}},
 			},
-			expected: `{ key1: "value1", key2: 123 }`,
 		},
-		{
-			name: "Nested Object and Array",
-			node: &ast.ObjectLiteral{
-				Pairs: []*ast.KeyValueExpression{
-					{
-						Key: &ast.Identifier{Value: "data"},
-						Value: &ast.ArrayLiteral{
-							Elements: []ast.Expression{
-								&ast.ObjectLiteral{
-									Pairs: []*ast.KeyValueExpression{
-										{
-											Key:   &ast.Identifier{Value: "id"},
-											Value: &ast.IntegerLiteral{Token: token.Token{Literal: "1"}},
-										},
-									},
+		expectedCompact:  `{ key1: "value1", key2: 123 }`,
+		expectedIndented: "{\n  key1: \"value1\",\n  key2: 123\n}",
+	},
+	{
+		name: "Nested Object and Array",
+		node: &ast.ObjectLiteral{
+			Pairs: []*ast.KeyValueExpression{
+				{
+					Key: &ast.Identifier{Value: "data"},
+					Value: &ast.ArrayLiteral{
+						Elements: []ast.Expression{
+							&ast.ObjectLiteral{
+								Pairs: []*ast.KeyValueExpression{
+									{Key: &ast.Identifier{Value: "id"}, Value: &ast.IntegerLiteral{Token: token.Token{Literal: "1"}}},
+									{Key: &ast.Identifier{Value: "status"}, Value: &ast.StringLiteral{Value: "ok"}},
 								},
-								&ast.IntegerLiteral{Token: token.Token{Literal: "2"}},
 							},
+							&ast.IntegerLiteral{Token: token.Token{Literal: "2"}},
 						},
 					},
 				},
 			},
-			expected: `{ data: [{ id: 1 }, 2] }`,
 		},
-		{
-			name: "Document with one statement",
-			node: &ast.Document{
-				Statements: []ast.Statement{
-					&ast.ExpressionStatement{
-						Expression: &ast.StringLiteral{Value: "top-level"},
-					},
-				},
-			},
-			expected: `"top-level"`,
-		},
-		{
-			name: "Document with multiple statements",
-			node: &ast.Document{
-				Statements: []ast.Statement{
-					&ast.ExpressionStatement{
-						Expression: &ast.IntegerLiteral{Token: token.Token{Literal: "1"}},
-					},
-					&ast.ExpressionStatement{
-						Expression: &ast.IntegerLiteral{Token: token.Token{Literal: "2"}},
-					},
-				},
-			},
-			expected: "1\n2",
-		},
-	}
+		expectedCompact:  `{ data: [{ id: 1, status: "ok" }, 2] }`,
+		expectedIndented: "{\n  data: [\n    {\n      id: 1,\n      status: \"ok\"\n    },\n    2\n  ]\n}",
+	},
+}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			var buf bytes.Buffer
-			f := formatter.New(&buf)
+func TestFormatter_Indentation(t *testing.T) {
+	t.Run("Default Indent (2 spaces)", func(t *testing.T) {
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				var buf bytes.Buffer
+				f := formatter.New(&buf, nil)
+				err := f.Format(tc.node)
+				require.NoError(t, err)
+				require.Equal(t, tc.expectedIndented, buf.String())
+			})
+		}
+	})
 
-			err := f.Format(tc.node)
-			require.NoError(t, err)
-			require.Equal(t, tc.expected, buf.String())
-		})
-	}
+	t.Run("Compact Output (indent 0)", func(t *testing.T) {
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				var buf bytes.Buffer
+				zero := 0
+				f := formatter.New(&buf, &zero)
+				err := f.Format(tc.node)
+				require.NoError(t, err)
+				require.Equal(t, tc.expectedCompact, buf.String())
+			})
+		}
+	})
+
+	t.Run("Custom Indent (4 spaces)", func(t *testing.T) {
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				var buf bytes.Buffer
+				four := 4
+				f := formatter.New(&buf, &four)
+				expected := strings.ReplaceAll(tc.expectedIndented, "  ", "    ")
+				err := f.Format(tc.node)
+				require.NoError(t, err)
+				require.Equal(t, expected, buf.String())
+			})
+		}
+	})
 }

@@ -7,6 +7,11 @@ type options struct {
 	// maxDepth specifies the maximum depth to descend when decoding into
 	// a Go value. If not set, a default depth limit is used.
 	maxDepth int
+
+	// indent specifies the number of spaces for indentation.
+	// A nil value means the default indentation is used.
+	// A value of 0 means compact output.
+	indent *int
 }
 
 // Option is a functional option for configuring an Encoder or Decoder.
@@ -23,6 +28,21 @@ func MaxDepth(n int) Option {
 			return fmt.Errorf("maml: max depth must be a positive integer")
 		}
 		o.maxDepth = n
+		return nil
+	}
+}
+
+// Indent returns an Option that sets the indentation for the encoder.
+// It specifies the number of spaces to use for each level of indentation.
+//
+// If spaces is 0, the output will be compact with no newlines or indentation.
+// The number of spaces must not be negative.
+func Indent(spaces int) Option {
+	return func(o *options) error {
+		if spaces < 0 {
+			return fmt.Errorf("maml: indent spaces cannot be negative")
+		}
+		o.indent = &spaces
 		return nil
 	}
 }
