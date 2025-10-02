@@ -34,26 +34,19 @@ func NewDecoder(r io.Reader, opts ...Option) *Decoder {
 }
 
 // Decode reads the next MAML-encoded value from its input and stores it in
-// the value pointed to by v. If v is nil or not a pointer, Decode returns
+// the value pointed to by out. If out is nil or not a pointer, Decode returns
 // an error.
 //
 // See the documentation for Unmarshal for details about the conversion of MAML
 // into a Go value.
 //
 // If the input contains syntax errors, Decode will return a ParseErrors value.
-//
-// Note: This is a non-streaming implementation. It reads the entire
-// reader into memory first before parsing.
 func (d *Decoder) Decode(out any) error {
 	if d.r == nil {
 		return fmt.Errorf("maml: Decode(nil reader)")
 	}
-	data, err := io.ReadAll(d.r)
-	if err != nil {
-		return err
-	}
 
-	l := lexer.New(data)
+	l := lexer.New(d.r)
 	p := parser.New(l)
 	doc := p.Parse()
 

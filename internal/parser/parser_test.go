@@ -1,6 +1,8 @@
 package parser_test
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/KimNorgaard/go-maml/internal/testutil"
@@ -28,7 +30,7 @@ func TestLiteralExpressions(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt // Capture range variable
 		t.Run(tt.input, func(t *testing.T) {
-			l := lexer.New([]byte(tt.input))
+			l := lexer.New(strings.NewReader(tt.input))
 			p := parser.New(l)
 			doc := p.Parse()
 			require.Empty(t, p.Errors(), "parser has errors")
@@ -78,7 +80,7 @@ func testLiteralExpression(t *testing.T, exp ast.Expression, expected any) {
 func TestArrayLiteralParsing(t *testing.T) {
 	input := `[1, "two", true]`
 
-	l := lexer.New([]byte(input))
+	l := lexer.New(strings.NewReader(input))
 	p := parser.New(l)
 	doc := p.Parse()
 	require.Empty(t, p.Errors(), "parser has errors")
@@ -102,7 +104,7 @@ func TestArrayLiteralParsing(t *testing.T) {
 func TestObjectLiteralParsing(t *testing.T) {
 	input := "{\n\t\"one\": 1,\n\ttwo: \"two\",\n\t\"three\": true\n}"
 
-	l := lexer.New([]byte(input))
+	l := lexer.New(strings.NewReader(input))
 	p := parser.New(l)
 	doc := p.Parse()
 	require.Empty(t, p.Errors(), "parser has errors")
@@ -130,7 +132,7 @@ func TestObjectLiteralParsing(t *testing.T) {
 
 func TestCommentWithControlCharacter(t *testing.T) {
 	input := "# a comment with a \x01 control character\n{ key: \"value\" }"
-	l := lexer.New([]byte(input))
+	l := lexer.New(strings.NewReader(input))
 	p := parser.New(l)
 	p.Parse()
 	require.NotEmpty(t, p.Errors(), "parser should have errors for control characters in comments")
@@ -161,7 +163,7 @@ func TestArrayWithOptionalCommas(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := lexer.New([]byte(tt.input))
+			l := lexer.New(strings.NewReader(tt.input))
 			p := parser.New(l)
 			doc := p.Parse()
 
@@ -207,7 +209,7 @@ func TestObjectKeyTypes(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				l := lexer.New([]byte(tt.input))
+				l := lexer.New(strings.NewReader(tt.input))
 				p := parser.New(l)
 				doc := p.Parse()
 
@@ -230,7 +232,7 @@ func TestObjectKeyTypes(t *testing.T) {
 
 	t.Run("Unquoted key with only digits", func(t *testing.T) {
 		input := `{ 123: 1 }`
-		l := lexer.New([]byte(input))
+		l := lexer.New(strings.NewReader(input))
 		p := parser.New(l)
 		doc := p.Parse()
 
@@ -327,7 +329,7 @@ func TestStringLiterals(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := lexer.New([]byte(tt.input))
+			l := lexer.New(strings.NewReader(tt.input))
 			p := parser.New(l)
 			doc := p.Parse()
 
@@ -396,7 +398,7 @@ func TestObjectParsingScenarios(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := lexer.New([]byte(tt.input))
+			l := lexer.New(strings.NewReader(tt.input))
 			p := parser.New(l)
 			doc := p.Parse()
 
@@ -450,7 +452,7 @@ func TestIntegerOverflow(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := lexer.New([]byte(tt.input))
+			l := lexer.New(strings.NewReader(tt.input))
 			p := parser.New(l)
 			p.Parse()
 
@@ -480,7 +482,7 @@ func TestFloatLiterals(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := lexer.New([]byte(tt.input))
+			l := lexer.New(strings.NewReader(tt.input))
 			p := parser.New(l)
 			doc := p.Parse()
 
@@ -547,7 +549,7 @@ func TestMultilineStringLiterals(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := lexer.New([]byte(tt.input))
+			l := lexer.New(strings.NewReader(tt.input))
 			p := parser.New(l)
 			doc := p.Parse()
 
@@ -571,7 +573,7 @@ func TestInvalidIntegerFormats(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt, func(t *testing.T) {
-			l := lexer.New([]byte(tt))
+			l := lexer.New(strings.NewReader(tt))
 			p := parser.New(l)
 			p.Parse()
 			require.NotEmpty(t, p.Errors(), "expected parser errors for %s", tt)
@@ -587,7 +589,7 @@ func TestInvalidFloatFormats(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt, func(t *testing.T) {
-			l := lexer.New([]byte(tt))
+			l := lexer.New(strings.NewReader(tt))
 			p := parser.New(l)
 			p.Parse()
 			require.NotEmpty(t, p.Errors(), "expected parser errors for %s", tt)
@@ -602,7 +604,7 @@ func TestStringReservedEscapeSequences(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt, func(t *testing.T) {
-			l := lexer.New([]byte(tt))
+			l := lexer.New(strings.NewReader(tt))
 			p := parser.New(l)
 			p.Parse()
 			require.NotEmpty(t, p.Errors(), "expected parser errors for %s", tt)
@@ -612,7 +614,7 @@ func TestStringReservedEscapeSequences(t *testing.T) {
 
 func TestMultilineStringInvalidQuotes(t *testing.T) {
 	input := `"""A string with """ three quotes"""`
-	l := lexer.New([]byte(input))
+	l := lexer.New(strings.NewReader(input))
 	p := parser.New(l)
 	p.Parse()
 	require.NotEmpty(t, p.Errors(), "expected parser errors for invalid quotes in multiline string")
@@ -620,7 +622,7 @@ func TestMultilineStringInvalidQuotes(t *testing.T) {
 
 func TestInvalidUTF8(t *testing.T) {
 	input := []byte("{\"\xff\": 1}") // Invalid UTF-8 sequence
-	l := lexer.New(input)
+	l := lexer.New(strings.NewReader(string(input)))
 	p := parser.New(l)
 	p.Parse()
 	require.NotEmpty(t, p.Errors(), "expected parser errors for invalid UTF-8")
@@ -628,7 +630,7 @@ func TestInvalidUTF8(t *testing.T) {
 
 func TestStringWithControlCharacter(t *testing.T) {
 	input := `"a string with a \x01 control character"`
-	l := lexer.New([]byte(input))
+	l := lexer.New(strings.NewReader(input))
 	p := parser.New(l)
 	p.Parse()
 	require.NotEmpty(t, p.Errors(), "parser should have errors for control characters in strings")
@@ -643,7 +645,7 @@ func TestEmptyAndWhitespaceInput(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt, func(t *testing.T) {
-			l := lexer.New([]byte(tt))
+			l := lexer.New(strings.NewReader(tt))
 			p := parser.New(l)
 			doc := p.Parse()
 			require.Empty(t, p.Errors(), "parser should have no errors on empty/whitespace input")
@@ -686,7 +688,7 @@ func TestSyntaxErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := lexer.New([]byte(tt.input))
+			l := lexer.New(strings.NewReader(tt.input))
 			p := parser.New(l)
 			p.Parse()
 			require.NotEmpty(t, p.Errors(), "expected parser errors for input: %s", tt.input)
@@ -701,7 +703,7 @@ func BenchmarkParse(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		l := lexer.New(benchmarkInput)
+		l := lexer.New(bytes.NewBuffer(benchmarkInput))
 		p := parser.New(l)
 		_ = p.Parse()
 	}

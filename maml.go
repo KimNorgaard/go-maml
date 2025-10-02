@@ -21,9 +21,9 @@ type Unmarshaler interface {
 	UnmarshalMAML([]byte) error
 }
 
-// Marshal returns the MAML encoding of v.
+// Marshal returns the MAML encoding of in.
 //
-// Marshal functions similarly to encoding/json.Marshal, traversing the value v
+// Marshal functions similarly to encoding/json.Marshal, traversing the value in
 // recursively. If an encountered value implements the Marshaler interface,
 // Marshal calls its MarshalMAML method to produce MAML.
 //
@@ -55,7 +55,8 @@ func Marshal(in any, opts ...Option) (out []byte, err error) {
 }
 
 // Unmarshal parses the MAML-encoded data and stores the result in the value
-// pointed to by v. If v is nil or not a pointer, Unmarshal returns an error.
+// pointed to by out. If out is nil or not a pointer, Unmarshal returns an
+// error.
 //
 // Unmarshal uses a similar mapping from MAML to Go values as encoding/json.Unmarshal,
 // and it will use the inverse of the rules described in Marshal. It supports

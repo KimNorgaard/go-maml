@@ -1,6 +1,7 @@
 package maml
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"math"
@@ -29,7 +30,7 @@ func NewEncoder(w io.Writer, opts ...Option) *Encoder {
 	return &Encoder{w: w, opts: opts}
 }
 
-// Encode writes the MAML encoding of v to the output stream.
+// Encode writes the MAML encoding of in to the output stream.
 // It will return an error if any errors were encountered during encoding.
 //
 // See the documentation for Marshal for details about the conversion
@@ -69,7 +70,7 @@ func (e *encodeState) marshalCustom(v reflect.Value, u Marshaler) (ast.Node, err
 
 	// The user's marshaled output must be parsed back into an AST node
 	// to be integrated into the main AST being built.
-	l := lexer.New(b)
+	l := lexer.New(bytes.NewReader(b))
 	p := parser.New(l)
 	doc := p.Parse()
 

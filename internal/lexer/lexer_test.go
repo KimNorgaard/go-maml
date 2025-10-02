@@ -1,6 +1,8 @@
 package lexer_test
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/KimNorgaard/go-maml/internal/lexer"
@@ -87,7 +89,7 @@ func TestNextToken(t *testing.T) {
 		{token.EOF, "", 18, 1},
 	}
 
-	l := lexer.New([]byte(input))
+	l := lexer.New(strings.NewReader(input))
 
 	for i, tt := range expectedTokens {
 		tok := l.NextToken()
@@ -122,7 +124,7 @@ func TestStringEscapes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			l := lexer.New([]byte(tt.input))
+			l := lexer.New(strings.NewReader(tt.input))
 			tok := l.NextToken()
 			if tt.isIllegal {
 				require.Equal(t, token.ILLEGAL, tok.Type)
@@ -174,7 +176,7 @@ func TestIllegalTokens(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := lexer.New([]byte(tt.input))
+			l := lexer.New(strings.NewReader(tt.input))
 			tok := l.NextToken()
 			require.Equal(t, token.ILLEGAL, tok.Type)
 			require.Equal(t, tt.expectedLiteral, tok.Literal)
@@ -211,7 +213,7 @@ func TestIdentifierAndNumberParsing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := lexer.New([]byte(tt.input))
+			l := lexer.New(strings.NewReader(tt.input))
 			tok := l.NextToken()
 
 			require.Equal(t, tt.expectedType, tok.Type, "wrong token type")
@@ -271,7 +273,7 @@ func TestControlCharacterValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := lexer.New([]byte(tt.input))
+			l := lexer.New(strings.NewReader(tt.input))
 			tok := l.NextToken()
 
 			if tt.expectIllegal {
@@ -318,7 +320,7 @@ func TestMultilineStringEdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := lexer.New([]byte(tt.input))
+			l := lexer.New(strings.NewReader(tt.input))
 			tok := l.NextToken()
 			require.Equal(t, token.STRING, tok.Type)
 			require.Equal(t, tt.expectedLiteral, tok.Literal)
@@ -342,7 +344,7 @@ func TestNewlineHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := lexer.New([]byte(tt.input))
+			l := lexer.New(strings.NewReader(tt.input))
 			// Skip the 'a' token for the last test case
 			if tt.name == "CR not followed by LF is illegal" {
 				l.NextToken()
@@ -360,8 +362,8 @@ func BenchmarkNextToken(b *testing.B) {
 
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
-		l := lexer.New(benchmarkInput)
+	for b.Loop() {
+		l := lexer.New(bytes.NewReader(benchmarkInput))
 		for {
 			tok := l.NextToken()
 			if tok.Type == token.EOF {
