@@ -78,12 +78,63 @@ func main() {
 	fmt.Printf("Spec Version: %d\n", cfg.Spec.Version)
 }
 ```
+### Embedded Struct Support
+
+`go-maml` fully supports unmarshaling into anonymous embedded structs, following
+the same precedence rules as Go's standard `encoding/json` package. This
+includes support for both value and pointer embedded structs.
+
+Given the following Go types:
+
+```go
+type Address struct {
+    City   string `maml:"city"`
+    Street string
+}
+
+type User struct {
+    Name string
+    *Address // Embedded pointer to struct
+}
+```
+
+And the MAML input:
+
+```maml
+{
+  Name: "Jane Doe"
+  city: "New York"
+  Street: "123 Main St"
+}
+```
+
+The `Unmarshal` call will behave as follows:
+
+```go
+var mamlInput = []byte(`
+{
+  Name: "Jane Doe"
+  city: "New York"
+  Street: "123 Main St"
+}
+`)
+
+var user User
+err := maml.Unmarshal(mamlInput, &user)
+
+// Result:
+// user.Name == "Jane Doe"
+// user.Address != nil
+// user.Address.City == "New York"  (matched via tag)
+// user.Address.Street == "123 Main St" (matched via case-insensitive name)
+```
 
 ## Features
 
 *   Familiar `Marshal`/`Unmarshal`/`NewEncoder`/`NewDecoder` interface.
 *   Full support for `maml.Marshaler` and `maml.Unmarshaler` interfaces.
 *   Struct tags for custom field mapping (`maml:"key,omitempty"`).
+*   Support for anonymous embedded structs, following `encoding/json` precedence rules.
 *   Provides structured parse errors with line and column numbers.
 *   Configurable encoding options, such as indentation.
 
