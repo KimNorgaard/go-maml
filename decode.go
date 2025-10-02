@@ -22,14 +22,26 @@ type Decoder struct {
 
 const defaultMaxDepth = 1000
 
-// NewDecoder returns a new decoder that reads from r. It stores options
-// to be applied later by the Decode method.
+// NewDecoder returns a new decoder that reads from r.
+//
+// The decoder may buffer data from r as necessary. It is the caller's
+// responsibility to call Close on r if required.
+//
+// Functional options can be provided to configure the decoding process,
+// such as setting a maximum decoding depth with the MaxDepth option.
 func NewDecoder(r io.Reader, opts ...Option) *Decoder {
 	return &Decoder{r: r, opts: opts}
 }
 
-// Decode reads the next MAML-encoded value from its input
-// and stores it in the value pointed to by out.
+// Decode reads the next MAML-encoded value from its input and stores it in
+// the value pointed to by v. If v is nil or not a pointer, Decode returns
+// an error.
+//
+// See the documentation for Unmarshal for details about the conversion of MAML
+// into a Go value.
+//
+// If the input contains syntax errors, Decode will return a ParseErrors value.
+//
 // Note: This is a non-streaming implementation. It reads the entire
 // reader into memory first before parsing.
 func (d *Decoder) Decode(out any) error {

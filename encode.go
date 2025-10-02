@@ -22,11 +22,22 @@ type Encoder struct {
 }
 
 // NewEncoder returns a new encoder that writes to w.
+//
+// Functional options can be provided to configure the encoding process,
+// such as setting the indentation with the Indent option.
 func NewEncoder(w io.Writer, opts ...Option) *Encoder {
 	return &Encoder{w: w, opts: opts}
 }
 
-// Encode writes the MAML encoding of in to the stream.
+// Encode writes the MAML encoding of v to the output stream.
+// It will return an error if any errors were encountered during encoding.
+//
+// See the documentation for Marshal for details about the conversion
+// of a Go value to MAML.
+//
+// Multiple calls to Encode can be used to stream multiple MAML documents,
+// but the output is not self-delimiting. It is the caller's responsibility
+// to separate the encoded values if required.
 func (e *Encoder) Encode(in any) error {
 	o := options{}
 	for _, opt := range e.opts {

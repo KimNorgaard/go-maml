@@ -1,5 +1,10 @@
 # Go MAML
 
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/KimNorgaard/go-maml)](https://pkg.go.dev/github.com/KimNorgaard/go-maml)
+![CI](https://github.com/KimNorgaard/go-maml/workflows/CI/badge.svg)
+[![codecov](https://codecov.io/gh/KimNorgaard/go-maml/branch/main/graph/badge.svg)](https://codecov.io/gh/KimNorgaard/go-maml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/KimNorgaard/go-maml)](https://goreportcard.com/report/github.com/KimNorgaard/go-maml)
+
 Go-MAML is a Go library for parsing the [MAML (Minimal Abstract Markup
 Language)](https://maml.dev) configuration language.
 
@@ -77,13 +82,15 @@ func main() {
 ## Features
 
 *   Familiar `Marshal`/`Unmarshal`/`NewEncoder`/`NewDecoder` interface.
-*   Supports all Go types.
-*   Struct tags.
-*   Provides structured errors with line and column numbers.
+*   Full support for `maml.Marshaler` and `maml.Unmarshaler` interfaces.
+*   Struct tags for custom field mapping (`maml:"key,omitempty"`).
+*   Provides structured parse errors with line and column numbers.
+*   Configurable encoding options, such as indentation.
 
 ## Roadmap
 
-The project is currently under development.
+The core library is stable and the feature set is complete. Future work may
+include performance optimizations or additional tooling.
 
 ## Contributing
 
