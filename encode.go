@@ -3,6 +3,9 @@ package maml
 import (
 	"fmt"
 	"io"
+
+	"github.com/KimNorgaard/go-maml/internal/formatter"
+	"github.com/KimNorgaard/go-maml/internal/marshaler"
 )
 
 // Encoder writes MAML values to an output stream.
@@ -18,8 +21,17 @@ func NewEncoder(w io.Writer, opts ...Option) *Encoder {
 
 // Encode writes the MAML encoding of v to the stream.
 func (e *Encoder) Encode(v any) error {
-	// TODO: Implement the marshaling logic. This will involve walking the
-	// Go value `v` using reflection, building an AST, and then formatting
-	// that AST to the writer `e.w`.
-	return fmt.Errorf("maml: Encode not yet implemented")
+	// TODO: Process options from e.opts here before marshaling.
+	// For example, passing them to the marshaler if needed.
+
+	node, err := marshaler.Marshal(v)
+	if err != nil {
+		return fmt.Errorf("maml: %w", err)
+	}
+
+	// TODO: Process options from e.opts here before formatting.
+	// For example, passing them to the formatter.
+
+	f := formatter.New(e.w)
+	return f.Format(node)
 }
