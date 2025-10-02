@@ -1,4 +1,4 @@
-package formatter
+package maml
 
 import (
 	"fmt"
@@ -8,36 +8,36 @@ import (
 	"github.com/KimNorgaard/go-maml/internal/ast"
 )
 
-const (
-	defaultIndent = 2
-)
-
-// Formatter writes a MAML AST to an output stream.
-type Formatter struct {
+// formatter writes a MAML AST to an output stream.
+type formatter struct {
 	w      io.Writer
 	indent string
 	depth  int
 }
 
-// New returns a new formatter that writes to w.
-func New(w io.Writer, indentSpaces *int) *Formatter {
+const (
+	defaultIndent = 2
+)
+
+// newFormatter returns a new formatter that writes to w.
+func newFormatter(w io.Writer, opts *options) *formatter {
 	spaces := defaultIndent
-	if indentSpaces != nil {
-		spaces = *indentSpaces
+	if opts.indent != nil {
+		spaces = *opts.indent
 	}
 	var indentStr string
 	if spaces > 0 {
 		indentStr = strings.Repeat(" ", spaces)
 	}
-	return &Formatter{w: w, indent: indentStr}
+	return &formatter{w: w, indent: indentStr}
 }
 
-// Format writes the MAML string representation of the AST node to the writer.
-func (f *Formatter) Format(node ast.Node) error {
+// format writes the MAML string representation of the AST node to the writer.
+func (f *formatter) format(node ast.Node) error {
 	return f.writeNode(node)
 }
 
-func (f *Formatter) writeIndent() error {
+func (f *formatter) writeIndent() error {
 	if f.indent == "" {
 		return nil
 	}
@@ -49,7 +49,7 @@ func (f *Formatter) writeIndent() error {
 	return nil
 }
 
-func (f *Formatter) writeNode(node ast.Node) error {
+func (f *formatter) writeNode(node ast.Node) error {
 	switch n := node.(type) {
 	case *ast.Document:
 		// A document can have multiple statements, but for marshaling,

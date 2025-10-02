@@ -5,9 +5,14 @@ import (
 	"fmt"
 
 	"github.com/KimNorgaard/go-maml/internal/lexer"
-	"github.com/KimNorgaard/go-maml/internal/mapper"
 	"github.com/KimNorgaard/go-maml/internal/parser"
 )
+
+// Marshaler is the interface implemented by types that
+// can marshal themselves into valid MAML.
+type Marshaler interface {
+	MarshalMAML() ([]byte, error)
+}
 
 // Marshal returns the MAML encoding of v.
 func Marshal(v any, opts ...Option) ([]byte, error) {
@@ -23,7 +28,7 @@ func Marshal(v any, opts ...Option) ([]byte, error) {
 // in the value pointed to by v.
 func Unmarshal(data []byte, v any, opts ...Option) error {
 	o := options{
-		maxDepth: mapper.DefaultMaxDepth,
+		maxDepth: defaultMaxDepth,
 	}
 
 	for _, opt := range opts {
@@ -47,5 +52,5 @@ func Unmarshal(data []byte, v any, opts ...Option) error {
 		return fmt.Errorf("maml: parsing error: %s", errStr)
 	}
 
-	return mapper.Map(doc, v, o.maxDepth)
+	return mapDocument(doc, v, &o)
 }
