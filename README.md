@@ -140,8 +140,10 @@ err := maml.Unmarshal(mamlInput, &user)
 
 ## Roadmap
 
-The core library is stable and the feature set is complete. Future work may
-include performance optimizations or additional tooling.
+This library implements v0.1 of the MAML specification. With respect to this
+version of the spec, the library's feature set is considered complete. As the
+MAML specification itself is currently in an unstable version (0.1), this
+library should also be considered unstable.
 
 ## Contributing
 
