@@ -130,24 +130,21 @@ func (f *formatter) writeObject(obj *ast.ObjectLiteral) error {
 			return err
 		}
 	} else { // Compact mode
-		if err := f.write(" "); err != nil {
-			return err
-		}
 		for i, pair := range obj.Pairs {
 			if i > 0 {
-				if err := f.write(", "); err != nil {
+				if err := f.write(","); err != nil {
 					return err
 				}
 			}
-			if err := f.write(pair.Key.String() + ": "); err != nil {
+			if err := f.write(pair.Key.String()); err != nil {
+				return err
+			}
+			if err := f.write(":"); err != nil {
 				return err
 			}
 			if err := f.writeNode(pair.Value); err != nil {
 				return err
 			}
-		}
-		if err := f.write(" "); err != nil {
-			return err
 		}
 	}
 
@@ -191,7 +188,7 @@ func (f *formatter) writeArray(arr *ast.ArrayLiteral) error {
 	} else { // Compact mode
 		for i, elem := range arr.Elements {
 			if i > 0 {
-				if err := f.write(", "); err != nil {
+				if err := f.write(","); err != nil {
 					return err
 				}
 			}

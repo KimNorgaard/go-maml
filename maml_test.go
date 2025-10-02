@@ -39,8 +39,8 @@ func TestMarshal_IndentOption(t *testing.T) {
 		require.NoError(t, err)
 		s := string(b)
 
-		require.Contains(t, s, `Name: "Test"`)
-		require.Contains(t, s, `Data: [1, 2]`)
+		require.Contains(t, s, `Name:"Test"`)
+		require.Contains(t, s, `Data:[1,2]`)
 	})
 
 	t.Run("Custom indentation with Indent(4)", func(t *testing.T) {
@@ -102,7 +102,7 @@ func TestMarshal_CustomMarshaler(t *testing.T) {
 		v := CustomValue{Value: 123}
 		b, err := maml.Marshal(v, maml.Indent(0))
 		require.NoError(t, err)
-		require.Equal(t, `{ "custom_value": 123 }`, string(b))
+		require.Equal(t, `{"custom_value":123}`, string(b))
 	})
 
 	t.Run("Marshaler on pointer", func(t *testing.T) {
@@ -188,8 +188,8 @@ func TestMarshal_CycleDetection(t *testing.T) {
 		b, err := maml.Marshal(p, maml.Indent(0))
 		require.NoError(t, err)
 		// Field order not guaranteed
-		require.Contains(t, string(b), `A: { Name: "Shared" }`)
-		require.Contains(t, string(b), `B: { Name: "Shared" }`)
+		require.Contains(t, string(b), `A:{Name:"Shared"}`)
+		require.Contains(t, string(b), `B:{Name:"Shared"}`)
 	})
 
 	t.Run("Indirect cycle through multiple structs", func(t *testing.T) {
@@ -199,5 +199,65 @@ func TestMarshal_CycleDetection(t *testing.T) {
 		_, err := maml.Marshal(a)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "encountered a cycle")
+	})
+}
+
+func TestMarshalUnmarshal_CollectionEdgeCases(t *testing.T) {
+	t.Run("Marshal nil slice", func(t *testing.T) {
+		var s []int // nil slice
+		b, err := maml.Marshal(s)
+		require.NoError(t, err)
+		require.Equal(t, "null", string(b))
+	})
+
+	t.Run("Marshal empty slice", func(t *testing.T) {
+		s := []int{} // empty but not nil
+		b, err := maml.Marshal(s, maml.Indent(0))
+		require.NoError(t, err)
+		require.Equal(t, "[]", string(b))
+	})
+
+	t.Run("Marshal nil map", func(t *testing.T) {
+		var m map[string]int // nil map
+		b, err := maml.Marshal(m)
+		require.NoError(t, err)
+		require.Equal(t, "null", string(b))
+	})
+
+	t.Run("Marshal empty map", func(t *testing.T) {
+		m := map[string]int{} // empty but not nil
+		b, err := maml.Marshal(m, maml.Indent(0))
+		require.NoError(t, err)
+		require.Equal(t, "{}", string(b))
+	})
+
+	t.Run("Unmarshal null into slice", func(t *testing.T) {
+		var s []int = []int{1, 2, 3} // pre-populate to ensure it's cleared
+		err := maml.Unmarshal([]byte("null"), &s)
+		require.NoError(t, err)
+		require.Nil(t, s, "unmarshaling null into a slice should make it nil")
+	})
+
+	t.Run("Unmarshal null into map", func(t *testing.T) {
+		var m map[string]int = map[string]int{"a": 1} // pre-populate
+		err := maml.Unmarshal([]byte("null"), &m)
+		require.NoError(t, err)
+		require.Nil(t, m, "unmarshaling null into a map should make it nil")
+	})
+
+	t.Run("Unmarshal empty array into slice", func(t *testing.T) {
+		var s []int = []int{1, 2, 3} // pre-populate to ensure it's overwritten
+		err := maml.Unmarshal([]byte("[]"), &s)
+		require.NoError(t, err)
+		require.NotNil(t, s, "unmarshaling an empty array should produce a non-nil slice")
+		require.Len(t, s, 0, "unmarshaling an empty array should produce a zero-length slice")
+	})
+
+	t.Run("Unmarshal empty object into map", func(t *testing.T) {
+		var m map[string]int = map[string]int{"a": 1} // pre-populate
+		err := maml.Unmarshal([]byte("{}"), &m)
+		require.NoError(t, err)
+		require.NotNil(t, m, "unmarshaling an empty object should produce a non-nil map")
+		require.Len(t, m, 0, "unmarshaling an empty object should produce a zero-length map")
 	})
 }

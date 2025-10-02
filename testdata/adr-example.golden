@@ -1,11 +1,11 @@
 {
   project: "MAML",
+  spec: {
+    author: "Anton Medvedev",
+    version: 1
+  },
   tags: [
     "minimal",
     "readable"
-  ],
-  spec: {
-    version: 1,
-    author: "Anton Medvedev"
-  }
+  ]
 }

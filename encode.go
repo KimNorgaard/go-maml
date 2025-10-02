@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/KimNorgaard/go-maml/internal/ast"
@@ -237,7 +238,11 @@ func (e *encodeState) marshalValue(v reflect.Value) (ast.Node, error) {
 		}
 
 		pairs := make([]*ast.KeyValueExpression, 0, v.Len())
-		for _, key := range v.MapKeys() {
+		keys := v.MapKeys()
+		sort.Slice(keys, func(i, j int) bool {
+			return keys[i].String() < keys[j].String()
+		})
+		for _, key := range keys {
 			value := v.MapIndex(key)
 
 			valueNode, err := e.marshalValue(value)

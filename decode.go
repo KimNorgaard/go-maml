@@ -224,6 +224,10 @@ func (ds *decodeState) mapMap(obj *ast.ObjectLiteral, rv reflect.Value) error {
 	}
 	if rv.IsNil() {
 		rv.Set(reflect.MakeMap(mapType))
+	} else {
+		for _, k := range rv.MapKeys() {
+			rv.SetMapIndex(k, reflect.Value{}) // The zero Value deletes the key
+		}
 	}
 	elemType := mapType.Elem()
 	for _, pair := range obj.Pairs {
