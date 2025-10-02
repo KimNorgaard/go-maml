@@ -89,7 +89,7 @@ type decodeState struct {
 	depth int
 }
 
-func (ds *decodeState) mapValue(expr ast.Expression, rv reflect.Value) error {
+func (ds *decodeState) mapValue(expr ast.Expression, rv reflect.Value) error { //nolint:gocyclo,funlen
 	ds.depth--
 	if ds.depth <= 0 {
 		return fmt.Errorf("maml: reached max recursion depth")
@@ -104,35 +104,13 @@ func (ds *decodeState) mapValue(expr ast.Expression, rv reflect.Value) error {
 		}
 	}
 
-	// Check for custom unmarshaler implementations.
-	// We check the pointer to the value, as UnmarshalMAML is often implemented on a pointer receiver.
-	if rv.CanAddr() {
-		pv := rv.Addr()
-		if pv.CanInterface() {
-			if u, ok := pv.Interface().(Unmarshaler); ok {
-				// To use UnmarshalMAML, we need to re-encode the current AST node back to bytes.
-				var buf bytes.Buffer
-				// Use compact formatting for the re-encoding.
-				compactIndent := 0
-				f := newFormatter(&buf, &options{indent: &compactIndent})
-				if err := f.format(expr); err != nil {
-					return fmt.Errorf("maml: failed to re-marshal node for custom unmarshaler: %w", err)
-				}
-				if err := u.UnmarshalMAML(buf.Bytes()); err != nil {
-					return &UnmarshalerError{Type: pv.Type(), Err: err}
-				}
-				return nil
-			}
-
-			if u, ok := pv.Interface().(encoding.TextUnmarshaler); ok {
-				if s, isString := expr.(*ast.StringLiteral); isString {
-					if err := u.UnmarshalText([]byte(s.Value)); err != nil {
-						return &UnmarshalerError{Type: pv.Type(), Err: err}
-					}
-					return nil
-				}
-			}
-		}
+	// Attempt to use a custom unmarshaler if available.
+	handled, err := ds.tryCustomUnmarshal(expr, rv)
+	if err != nil {
+		return err
+	}
+	if handled {
+		return nil
 	}
 
 	for rv.Kind() == reflect.Pointer {
@@ -182,6 +160,49 @@ func (ds *decodeState) mapValue(expr ast.Expression, rv reflect.Value) error {
 	default:
 		return fmt.Errorf("maml: mapping for AST node type %T not yet implemented", node)
 	}
+}
+
+// tryCustomUnmarshal attempts to use a custom unmarshaler (maml.Unmarshaler or
+// encoding.TextUnmarshaler) on the given reflect.Value. It returns true if a
+// custom unmarshaler was found and used, in which case the caller should not
+// proceed with default unmarshaling.
+func (ds *decodeState) tryCustomUnmarshal(expr ast.Expression, rv reflect.Value) (bool, error) {
+	if !rv.CanAddr() {
+		return false, nil
+	}
+	pv := rv.Addr()
+	if !pv.CanInterface() {
+		return false, nil
+	}
+
+	// Check for maml.Unmarshaler
+	if u, ok := pv.Interface().(Unmarshaler); ok {
+		var buf bytes.Buffer
+		compactIndent := 0
+		f := newFormatter(&buf, &options{indent: &compactIndent})
+		if err := f.format(expr); err != nil {
+			return true, fmt.Errorf("maml: failed to re-marshal node for custom unmarshaler: %w", err)
+		}
+		if err := u.UnmarshalMAML(buf.Bytes()); err != nil {
+			return true, &UnmarshalerError{Type: pv.Type(), Err: err}
+		}
+		return true, nil
+	}
+
+	// Check for encoding.TextUnmarshaler
+	if u, ok := pv.Interface().(encoding.TextUnmarshaler); ok {
+		s, isString := expr.(*ast.StringLiteral)
+		if !isString {
+			// TextUnmarshaler can only be used on string values.
+			return false, nil
+		}
+		if err := u.UnmarshalText([]byte(s.Value)); err != nil {
+			return true, &UnmarshalerError{Type: pv.Type(), Err: err}
+		}
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func (ds *decodeState) mapString(s *ast.StringLiteral, rv reflect.Value) error {

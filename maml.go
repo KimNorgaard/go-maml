@@ -16,6 +16,8 @@ type Marshaler interface {
 // valid MAML value. UnmarshalMAML must copy the MAML data if it wishes
 // to retain the data after returning.
 type Unmarshaler interface {
+	// UnmarshalMAML unmarshals the MAML-encoded data and stores the result
+	// in the value pointed to.
 	UnmarshalMAML([]byte) error
 }
 
