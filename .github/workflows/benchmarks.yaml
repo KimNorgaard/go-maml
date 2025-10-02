@@ -1,4 +1,4 @@
-name: "Benchmarks"
+name: Benchmarks
 
 on:
   pull_request:
@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
+      pull-requests: write
+      contents: read
     steps:
       - name: Checkout Base
         uses: actions/checkout@v5
