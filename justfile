@@ -30,6 +30,9 @@ gen:
 test:
 	{{TEST_FLAGS}} go test -v ./...
 
+bench:
+	{{TEST_FLAGS}} go test -bench=. -benchmem ./...
+
 fuzz:
     {{TEST_FLAGS}} go test -fuzz=Fuzz -fuzztime 60s
 
