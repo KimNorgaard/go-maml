@@ -410,7 +410,7 @@ var fieldCache sync.Map // map[reflect.Type]map[string]field
 
 // cachedFields returns a map of field names to field properties for the given type.
 // The result is cached to avoid repeated reflection work.
-func cachedFields(t reflect.Type) map[string]field {
+func cachedFields(t reflect.Type) map[string]field { //nolint:gocognit
 	if f, ok := fieldCache.Load(t); ok {
 		if fields, ok := f.(map[string]field); ok {
 			return fields
