@@ -121,6 +121,40 @@ func isEmptyValue(v reflect.Value) bool {
 	return false
 }
 
+// isBareKey checks if a string can be used as a bare key in an object.
+// Bare keys can be identifiers or numbers, but not keywords.
+func isBareKey(s string) bool {
+	if s == "" {
+		return false
+	}
+
+	// Keywords must be quoted.
+	if token.LookupIdent(s) != token.IDENT {
+		return false
+	}
+
+	// If it can be parsed as a number, it can be a bare key.
+	if _, ok := lexer.ParseAsNumber(s); ok {
+		return true
+	}
+
+	// Otherwise, it must be a valid identifier.
+	// Must not start with a hyphen (unless it's a number, handled above).
+	if s[0] == '-' {
+		return false
+	}
+
+	for _, r := range s {
+		// This is isIdentifierChar from the lexer.
+		if !(('a' <= r && r <= 'z') || ('A' <= r && r <= 'Z') ||
+			('0' <= r && r <= '9') || r == '_' || r == '-') {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (e *encodeState) marshalValue(v reflect.Value) (ast.Node, error) { //nolint:gocyclo
 	if !v.IsValid() {
 		return &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
@@ -220,7 +254,14 @@ func (e *encodeState) marshalUint(v reflect.Value) (ast.Node, error) {
 
 func (e *encodeState) marshalFloat(v reflect.Value) (ast.Node, error) {
 	val := v.Float()
-	lit := fmt.Sprintf("%g", val)
+	var lit string
+	// If the float is a whole number, format it with a decimal point
+	// to ensure it's unmarshaled back as a float.
+	if val == math.Trunc(val) {
+		lit = fmt.Sprintf("%.1f", val)
+	} else {
+		lit = fmt.Sprintf("%g", val)
+	}
 	return &ast.FloatLiteral{Token: token.Token{Type: token.FLOAT, Literal: lit}, Value: val}, nil
 }
 
@@ -298,14 +339,26 @@ func (e *encodeState) marshalMap(v reflect.Value) (ast.Node, error) {
 		}
 
 		keyStr := key.String()
-		keyIdent := &ast.Identifier{
-			Token: token.Token{Type: token.IDENT, Literal: keyStr},
-			Value: keyStr,
+
+		var keyNode ast.Expression
+		if isBareKey(keyStr) {
+			tok := token.Token{Literal: keyStr}
+			if typ, ok := lexer.ParseAsNumber(keyStr); ok {
+				tok.Type = typ
+			} else {
+				tok.Type = token.IDENT
+			}
+			keyNode = &ast.Identifier{Token: tok, Value: keyStr}
+		} else {
+			keyNode = &ast.StringLiteral{
+				Token: token.Token{Type: token.STRING, Literal: keyStr},
+				Value: keyStr,
+			}
 		}
 
 		pairs = append(pairs, &ast.KeyValueExpression{
 			Token: token.Token{Type: token.COLON, Literal: ":"},
-			Key:   keyIdent,
+			Key:   keyNode,
 			Value: valueExpr,
 		})
 	}
@@ -353,14 +406,25 @@ func (e *encodeState) marshalStruct(v reflect.Value) (ast.Node, error) {
 			return nil, fmt.Errorf("maml: marshaled struct field value is not an expression")
 		}
 
-		keyIdent := &ast.Identifier{
-			Token: token.Token{Type: token.IDENT, Literal: keyStr},
-			Value: keyStr,
+		var keyNode ast.Expression
+		if isBareKey(keyStr) {
+			tok := token.Token{Literal: keyStr}
+			if typ, ok := lexer.ParseAsNumber(keyStr); ok {
+				tok.Type = typ
+			} else {
+				tok.Type = token.IDENT
+			}
+			keyNode = &ast.Identifier{Token: tok, Value: keyStr}
+		} else {
+			keyNode = &ast.StringLiteral{
+				Token: token.Token{Type: token.STRING, Literal: keyStr},
+				Value: keyStr,
+			}
 		}
 
 		pairs = append(pairs, &ast.KeyValueExpression{
 			Token: token.Token{Type: token.COLON, Literal: ":"},
-			Key:   keyIdent,
+			Key:   keyNode,
 			Value: valueExpr,
 		})
 	}
