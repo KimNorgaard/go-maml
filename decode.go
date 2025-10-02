@@ -334,6 +334,33 @@ func (ds *decodeState) mapMap(obj *ast.ObjectLiteral, rv reflect.Value) error {
 	return nil
 }
 
+// resolveFieldPath traverses the given field index path `idx` starting from `rv`.
+// It initializes any nil embedded pointers encountered along the path.
+// Returns the reflect.Value of the final field at the end of the path.
+func (ds *decodeState) resolveFieldPath(rv reflect.Value, idx []int) (reflect.Value, error) {
+	currentVal := rv
+	for i, fieldIndex := range idx {
+		// Handle pointer indirection and nil pointer initialization
+		for currentVal.Kind() == reflect.Pointer {
+			if currentVal.IsNil() {
+				if !currentVal.CanSet() {
+					return reflect.Value{}, fmt.Errorf("maml: cannot set nil embedded pointer in path %v", idx[:i+1])
+				}
+				currentVal.Set(reflect.New(currentVal.Type().Elem()))
+			}
+			currentVal = currentVal.Elem()
+		}
+
+		if currentVal.Kind() != reflect.Struct {
+			// This should ideally not happen if cachedFields correctly processes struct fields
+			// The idx path should only lead through structs or pointers to structs until the final field.
+			return reflect.Value{}, fmt.Errorf("maml: expected struct at path segment %v, got %s", idx[:i], currentVal.Kind())
+		}
+		currentVal = currentVal.Field(fieldIndex)
+	}
+	return currentVal, nil
+}
+
 func (ds *decodeState) mapStruct(obj *ast.ObjectLiteral, rv reflect.Value) error {
 	fields := cachedFields(rv.Type())
 	for _, pair := range obj.Pairs {
@@ -343,9 +370,13 @@ func (ds *decodeState) mapStruct(obj *ast.ObjectLiteral, rv reflect.Value) error
 		}
 
 		if targetField := findField(fields, keyStr); targetField != nil {
-			fieldVal := rv.FieldByIndex(targetField.idx)
-			if fieldVal.IsValid() && fieldVal.CanSet() {
-				if err := ds.mapValue(pair.Value, fieldVal); err != nil {
+			finalFieldVal, err := ds.resolveFieldPath(rv, targetField.idx)
+			if err != nil {
+				return err
+			}
+
+			if finalFieldVal.IsValid() && finalFieldVal.CanSet() {
+				if err := ds.mapValue(pair.Value, finalFieldVal); err != nil {
 					return err
 				}
 			}
@@ -410,50 +441,103 @@ func cachedFields(t reflect.Type) map[string]field { //nolint:gocognit
 		}
 	}
 
-	fields := make(map[string]field)
-	var walk func(t reflect.Type, idx []int)
-	walk = func(t reflect.Type, idx []int) {
-		for i := 0; i < t.NumField(); i++ {
-			sf := t.Field(i)
-			if sf.Anonymous {
-				// Recurse into embedded structs.
-				walk(sf.Type, append(idx, i))
+	// fieldEntry stores information about a field found during traversal,
+	// including its depth for precedence resolution.
+	type fieldEntry struct {
+		f             field
+		name          string // The actual name (tag or field name)
+		depth         int    // Depth of embedding (0 for top-level)
+		originalField reflect.StructField
+	}
+
+	var collectedEntries []fieldEntry
+
+	var walkAndCollect func(currentType reflect.Type, currentIdx []int, currentDepth int)
+	walkAndCollect = func(currentType reflect.Type, currentIdx []int, currentDepth int) {
+		for i := 0; i < currentType.NumField(); i++ {
+			sf := currentType.Field(i)
+			// Create a new slice for fieldIdx to avoid appendAssign issues and ensure
+			// `currentIdx` is not modified by recursive calls using the same underlying array.
+			fieldIdx := make([]int, len(currentIdx)+1)
+			copy(fieldIdx, currentIdx)
+			fieldIdx[len(currentIdx)] = i
+
+			// Dereference embedded pointer types for recursion,
+			// but `fieldIdx` still points to the pointer if it was a pointer embed.
+			fieldType := sf.Type
+			if fieldType.Kind() == reflect.Pointer {
+				fieldType = fieldType.Elem()
+			}
+
+			if sf.Anonymous && fieldType.Kind() == reflect.Struct {
+				// Recurse into embedded structs, increment depth
+				walkAndCollect(fieldType, fieldIdx, currentDepth+1)
 				continue
 			}
+
+			// Skip unexported fields
 			if !sf.IsExported() {
 				continue
 			}
 
 			tag := sf.Tag.Get("maml")
+			// Skip fields with `maml:"-"` tag
 			if tag == "-" {
 				continue
 			}
 
-			f := field{idx: append(idx, i)}
+			actualField := field{idx: fieldIdx}
 			tagName := strings.Split(tag, ",")[0]
 
-			// Store entries for the original tag name and field name.
+			// Add entries for the tag name (if present) and the field name.
 			if tagName != "" {
-				fields[tagName] = f
+				collectedEntries = append(collectedEntries, fieldEntry{f: actualField, name: tagName, depth: currentDepth, originalField: sf})
 			}
-			fields[sf.Name] = f
-
-			// Store lower-cased versions for case-insensitive fallback,
-			// but do not overwrite an existing case-sensitive match.
-			if tagName != "" {
-				lowerTagName := strings.ToLower(tagName)
-				if _, ok := fields[lowerTagName]; !ok {
-					fields[lowerTagName] = f
-				}
-			}
-			lowerFieldName := strings.ToLower(sf.Name)
-			if _, ok := fields[lowerFieldName]; !ok {
-				fields[lowerFieldName] = f
-			}
+			collectedEntries = append(collectedEntries, fieldEntry{f: actualField, name: sf.Name, depth: currentDepth, originalField: sf})
 		}
 	}
-	walk(t, nil)
 
-	fieldCache.Store(t, fields)
-	return fields
+	walkAndCollect(t, nil, 0) // Start walking from the top-level type at depth 0
+
+	// Now, filter `collectedEntries` to apply precedence rules.
+	// Fields at a shallower depth take precedence. If depths are equal,
+	// the field declared earlier (in the Go struct definition) takes precedence.
+	// `collectedEntries` implicitly preserves declaration order for fields at the same depth,
+	// as `append` maintains order and `walkAndCollect` processes fields in declaration order.
+	precedenceMap := make(map[string]fieldEntry)
+
+	for _, entry := range collectedEntries {
+		if existing, ok := precedenceMap[entry.name]; !ok {
+			// First time seeing this name, add it.
+			precedenceMap[entry.name] = entry
+		} else if entry.depth < existing.depth {
+			// Found a field with shallower depth for the same name, replace.
+			precedenceMap[entry.name] = entry
+		}
+		// If entry.depth >= existing.depth, the existing field takes precedence
+		// (either shallower, or same depth but declared earlier due to traversal order).
+	}
+
+	finalFields := make(map[string]field)
+
+	// Populate finalFields, handling case-insensitive fallback as per original logic.
+	// For case-insensitive, if a case-sensitive match already exists (from precedenceMap),
+	// we do not overwrite it with a new lowercase entry.
+	for name, entry := range precedenceMap {
+		// Add the case-sensitive name first (or the chosen name from precedenceMap).
+		finalFields[name] = entry.f
+
+		// Now, consider the lowercase version for case-insensitive fallback.
+		lowerName := strings.ToLower(name)
+		if _, ok := finalFields[lowerName]; !ok {
+			// Only add the lowercase version if it doesn't already exist.
+			// This means if "Name" was chosen (e.g. from a tag or field name),
+			// and "name" (lowercase of "Name") is used for lookup, it should map to the same field.
+			// This also respects if another field "name" (case-sensitive) was chosen.
+			finalFields[lowerName] = entry.f
+		}
+	}
+
+	fieldCache.Store(t, finalFields)
+	return finalFields
 }
