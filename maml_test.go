@@ -261,3 +261,77 @@ func TestMarshalUnmarshal_CollectionEdgeCases(t *testing.T) {
 		require.Len(t, m, 0, "unmarshaling an empty object should produce a zero-length map")
 	})
 }
+
+// --- Custom Unmarshaler Tests ---
+
+// CustomUnmarshalValue implements maml.Unmarshaler
+type CustomUnmarshalValue struct {
+	Value string
+}
+
+func (c *CustomUnmarshalValue) UnmarshalMAML(data []byte) error {
+	// A simple custom format: expecting `{ custom: "value" }`
+	var inner struct {
+		Value string `maml:"custom"`
+	}
+	if err := maml.Unmarshal(data, &inner); err != nil {
+		return err
+	}
+	c.Value = inner.Value
+	return nil
+}
+
+// CustomTextValue implements encoding.TextUnmarshaler
+type CustomTextValue struct {
+	Value string
+}
+
+func (c *CustomTextValue) UnmarshalText(text []byte) error {
+	c.Value = "text(" + string(text) + ")"
+	return nil
+}
+
+// CustomUnmarshalError implements maml.Unmarshaler and always returns an error.
+type CustomUnmarshalError struct{}
+
+func (c *CustomUnmarshalError) UnmarshalMAML(data []byte) error {
+	return errors.New("custom unmarshal error")
+}
+
+func TestUnmarshal_CustomUnmarshaler(t *testing.T) {
+	t.Run("Unmarshaler with pointer receiver", func(t *testing.T) {
+		input := `{ custom: "hello world" }`
+		var v CustomUnmarshalValue
+		err := maml.Unmarshal([]byte(input), &v)
+		require.NoError(t, err)
+		require.Equal(t, "hello world", v.Value)
+	})
+
+	t.Run("TextUnmarshaler on string value", func(t *testing.T) {
+		input := `"a string"`
+		var v CustomTextValue
+		err := maml.Unmarshal([]byte(input), &v)
+		require.NoError(t, err)
+		require.Equal(t, "text(a string)", v.Value)
+	})
+
+	t.Run("TextUnmarshaler is not called for non-string value", func(t *testing.T) {
+		// The TextUnmarshaler should only be called if the MAML value is a string.
+		// Here we provide an integer, so the default unmarshaler should fail.
+		input := `123`
+		var v CustomTextValue
+		err := maml.Unmarshal([]byte(input), &v)
+		require.Error(t, err)
+		// We expect an error because the default unmarshaler will try to put an int
+		// into a struct, which is not supported without field mapping.
+		require.Contains(t, err.Error(), "cannot unmarshal integer into Go value of type maml_test.CustomTextValue")
+	})
+
+	t.Run("Unmarshaler that returns an error", func(t *testing.T) {
+		input := `{}`
+		var v CustomUnmarshalError
+		err := maml.Unmarshal([]byte(input), &v)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "custom unmarshal error")
+	})
+}
