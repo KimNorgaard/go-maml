@@ -21,11 +21,7 @@ type Lexer struct {
 
 // New creates and returns a new Lexer.
 func New(r io.Reader) *Lexer {
-	l := &Lexer{
-		r:      bufio.NewReader(r),
-		line:   1,
-		column: 1,
-	}
+	l := &Lexer{r: bufio.NewReader(r), line: 1, column: 1}
 	l.readRune()
 	return l
 }
@@ -265,28 +261,24 @@ func (l *Lexer) readHex(n int) (rune, bool) {
 }
 
 func (l *Lexer) peekRune() rune {
-	// Prioritize the returned slice, as Peek can return both bytes and an error
-	bytes, _ := l.r.Peek(utf8.UTFMax)
-	if len(bytes) == 0 {
+	peekedBytes, _ := l.r.Peek(utf8.UTFMax)
+	if len(peekedBytes) == 0 {
 		return 0
 	}
-	r, _ := utf8.DecodeRune(bytes)
+	r, _ := utf8.DecodeRune(peekedBytes)
 	return r
 }
 
 func (l *Lexer) peekNextRune() rune {
-	// Prioritize the returned slice, as Peek can return both bytes and an error
-	bytes, _ := l.r.Peek(utf8.UTFMax * 2)
-	if len(bytes) == 0 {
+	peekedBytes, _ := l.r.Peek(utf8.UTFMax * 2)
+	if len(peekedBytes) == 0 {
 		return 0
 	}
-
-	_, firstRuneSize := utf8.DecodeRune(bytes)
-	if len(bytes) <= firstRuneSize { // Not enough bytes for a second rune.
+	_, firstRuneSize := utf8.DecodeRune(peekedBytes)
+	if len(peekedBytes) <= firstRuneSize {
 		return 0
 	}
-
-	r, _ := utf8.DecodeRune(bytes[firstRuneSize:])
+	r, _ := utf8.DecodeRune(peekedBytes[firstRuneSize:])
 	return r
 }
 
