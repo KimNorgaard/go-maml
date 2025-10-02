@@ -296,11 +296,10 @@ func findField(fields map[string]field, keyStr string) *field {
 	if f, ok := fields[keyStr]; ok {
 		return &f
 	}
-	// Fallback to a case-insensitive match on all fields.
-	for name, f := range fields {
-		if strings.EqualFold(name, keyStr) {
-			return &f
-		}
+
+	// Fallback to a case-insensitive match pre-calculated in the cache.
+	if f, ok := fields[strings.ToLower(keyStr)]; ok {
+		return &f
 	}
 	return nil
 }
@@ -423,15 +422,27 @@ func cachedFields(t reflect.Type) map[string]field {
 			if tag == "-" {
 				continue
 			}
-			name := sf.Name
-			if tag != "" {
-				name = strings.Split(tag, ",")[0]
-			}
 
-			fields[name] = field{idx: append(idx, i)}
-			// Also add the original field name for case-insensitive fallback.
-			if _, ok := fields[sf.Name]; !ok {
-				fields[sf.Name] = field{idx: append(idx, i)}
+			f := field{idx: append(idx, i)}
+			tagName := strings.Split(tag, ",")[0]
+
+			// Store entries for the original tag name and field name.
+			if tagName != "" {
+				fields[tagName] = f
+			}
+			fields[sf.Name] = f
+
+			// Store lower-cased versions for case-insensitive fallback,
+			// but do not overwrite an existing case-sensitive match.
+			if tagName != "" {
+				lowerTagName := strings.ToLower(tagName)
+				if _, ok := fields[lowerTagName]; !ok {
+					fields[lowerTagName] = f
+				}
+			}
+			lowerFieldName := strings.ToLower(sf.Name)
+			if _, ok := fields[lowerFieldName]; !ok {
+				fields[lowerFieldName] = f
 			}
 		}
 	}
