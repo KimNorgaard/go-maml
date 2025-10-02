@@ -136,6 +136,8 @@ func (ds *decodeState) mapValue(expr ast.Expression, rv reflect.Value) error { /
 	case *ast.NullLiteral:
 		rv.Set(reflect.Zero(rv.Type()))
 		return nil
+	case *ast.Identifier:
+		return ds.mapIdentifier(node, rv)
 	case *ast.StringLiteral:
 		return ds.mapString(node, rv)
 	case *ast.IntegerLiteral:
@@ -215,6 +217,14 @@ func (ds *decodeState) mapString(s *ast.StringLiteral, rv reflect.Value) error {
 		return fmt.Errorf("maml: cannot unmarshal string into Go value of type %s", rv.Type())
 	}
 	rv.SetString(s.Value)
+	return nil
+}
+
+func (ds *decodeState) mapIdentifier(i *ast.Identifier, rv reflect.Value) error {
+	if rv.Kind() != reflect.String {
+		return fmt.Errorf("maml: cannot unmarshal identifier into Go value of type %s", rv.Type())
+	}
+	rv.SetString(i.Value)
 	return nil
 }
 
@@ -357,6 +367,9 @@ func (ds *decodeState) mapInterface(expr ast.Expression, rv reflect.Value) error
 	}
 	var concreteVal reflect.Value
 	switch expr.(type) {
+	case *ast.Identifier:
+		var s string
+		concreteVal = reflect.ValueOf(&s).Elem()
 	case *ast.StringLiteral:
 		var s string
 		concreteVal = reflect.ValueOf(&s).Elem()

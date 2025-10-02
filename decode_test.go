@@ -95,6 +95,14 @@ func TestUnmarshal(t *testing.T) {
 			"float": float64(1.2),
 		}
 		require.Equal(t, expected, m2)
+
+		var m3 map[string]any
+		err = maml.Unmarshal([]byte(`{ bareword: value }`), &m3)
+		require.NoError(t, err)
+		expected3 := map[string]any{
+			"bareword": "value",
+		}
+		require.Equal(t, expected3, m3)
 	})
 
 	t.Run("Type Mismatch Errors", func(t *testing.T) {
