@@ -1,6 +1,8 @@
 package maml_test
 
 import (
+	"bytes"
+	_ "embed"
 	"strings"
 	"testing"
 
@@ -210,4 +212,33 @@ func TestUnmarshalErrorCases(t *testing.T) {
 		require.Error(t, err)
 		require.EqualError(t, err, "maml: Unmarshal(non-pointer *string or nil)")
 	})
+
+	t.Run("Error on nil reader", func(t *testing.T) {
+		dec := maml.NewDecoder(nil)
+		var v any
+		err := dec.Decode(&v)
+		require.Error(t, err)
+		require.EqualError(t, err, "maml: Decode(nil reader)")
+	})
+}
+
+//go:embed testdata/large.maml
+var benchmarkMAMLInput []byte
+
+func BenchmarkDecode(b *testing.B) {
+	b.ReportAllocs()
+	b.SetBytes(int64(len(benchmarkMAMLInput)))
+
+	var v any
+	r := bytes.NewReader(benchmarkMAMLInput)
+
+	b.ResetTimer()
+
+	for b.Loop() {
+		r.Seek(0, 0)
+		dec := maml.NewDecoder(r)
+		if err := dec.Decode(&v); err != nil {
+			b.Fatalf("Decode failed during benchmark: %v", err)
+		}
+	}
 }
