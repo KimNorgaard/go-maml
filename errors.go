@@ -13,3 +13,18 @@ func (e *MarshalerError) Error() string {
 }
 
 func (e *MarshalerError) Unwrap() error { return e.Err }
+
+// UnmarshalerError represents an error that occurred while calling
+// the UnmarshalMAML method.
+type UnmarshalerError struct {
+	Type reflect.Type
+	Err  error
+}
+
+func (e *UnmarshalerError) Error() string {
+	return "maml: error calling UnmarshalMAML for type " + e.Type.String() + ": " + e.Err.Error()
+}
+
+func (e *UnmarshalerError) Unwrap() error {
+	return e.Err
+}

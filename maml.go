@@ -4,11 +4,19 @@ import (
 	"bytes"
 )
 
-// Marshaler is the interface implemented by types that
-// can marshal themselves into valid MAML.
+// Marshaler is the interface implemented by types that can marshal themselves
+// into valid MAML.
 type Marshaler interface {
 	// MarshalMAML returns the MAML encoding of the value.
 	MarshalMAML() ([]byte, error)
+}
+
+// Unmarshaler is the interface implemented by types that can unmarshal
+// a MAML description of themselves. The input can be assumed to be a
+// valid MAML value. UnmarshalMAML must copy the MAML data if it wishes
+// to retain the data after returning.
+type Unmarshaler interface {
+	UnmarshalMAML([]byte) error
 }
 
 // Marshal returns the MAML encoding of in.

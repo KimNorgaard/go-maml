@@ -1,6 +1,8 @@
 package maml
 
 import (
+	"bytes"
+	"encoding"
 	"fmt"
 	"io"
 	"reflect"
@@ -99,6 +101,37 @@ func (ds *decodeState) mapValue(expr ast.Expression, rv reflect.Value) error {
 		case reflect.Interface, reflect.Pointer, reflect.Map, reflect.Slice:
 			rv.Set(reflect.Zero(rv.Type()))
 			return nil
+		}
+	}
+
+	// Check for custom unmarshaler implementations.
+	// We check the pointer to the value, as UnmarshalMAML is often implemented on a pointer receiver.
+	if rv.CanAddr() {
+		pv := rv.Addr()
+		if pv.CanInterface() {
+			if u, ok := pv.Interface().(Unmarshaler); ok {
+				// To use UnmarshalMAML, we need to re-encode the current AST node back to bytes.
+				var buf bytes.Buffer
+				// Use compact formatting for the re-encoding.
+				compactIndent := 0
+				f := newFormatter(&buf, &options{indent: &compactIndent})
+				if err := f.format(expr); err != nil {
+					return fmt.Errorf("maml: failed to re-marshal node for custom unmarshaler: %w", err)
+				}
+				if err := u.UnmarshalMAML(buf.Bytes()); err != nil {
+					return &UnmarshalerError{Type: pv.Type(), Err: err}
+				}
+				return nil
+			}
+
+			if u, ok := pv.Interface().(encoding.TextUnmarshaler); ok {
+				if s, isString := expr.(*ast.StringLiteral); isString {
+					if err := u.UnmarshalText([]byte(s.Value)); err != nil {
+						return &UnmarshalerError{Type: pv.Type(), Err: err}
+					}
+					return nil
+				}
+			}
 		}
 	}
 
