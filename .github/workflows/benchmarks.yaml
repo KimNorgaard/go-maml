@@ -22,8 +22,16 @@ jobs:
         with:
           go-version-file: "go.mod"
 
+      - name: Checkout Base
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+
       - name: Run Benchmark on Base
         run: go test -bench=. -benchmem -count=5 ./... > base.bench
+
+      - name: Save Base Benchmark Results
+        run: mv base.bench /tmp/base.bench
 
       - name: Checkout Head
         uses: actions/checkout@v5
@@ -39,7 +47,7 @@ jobs:
       - name: Compare Benchmarks
         id: compare
         run: |
-          BENCH_OUTPUT=$(benchstat base.bench head.bench)
+          BENCH_OUTPUT=$(benchstat /tmp/base.bench head.bench)
           echo "$BENCH_OUTPUT"
           echo "bench_output<<EOF" >> $GITHUB_OUTPUT
           echo "$BENCH_OUTPUT" >> $GITHUB_OUTPUT
