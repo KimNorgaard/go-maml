@@ -1,3 +1,6 @@
 {
-  key: "    Roses are red,\n    Violets are blue;\n  "
+  key: """
+    Roses are red,
+    Violets are blue;
+  """
 }

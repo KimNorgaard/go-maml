@@ -1,5 +1,5 @@
 {
-  one: 1,
-  three: true,
+  one: 1
+  three: true
   two: "two"
 }
