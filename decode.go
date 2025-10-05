@@ -389,17 +389,28 @@ func (ds *decodeState) mapStruct(obj *ast.ObjectLiteral, rv reflect.Value) error
 
 	// Check for unknown fields if disallowUnknownFields is enabled
 	if ds.opts.disallowUnknownFields {
-		for _, pair := range obj.Pairs {
-			keyStr, err := resolveMapKey(pair.Key)
-			if err != nil {
-				return err // Should not happen if resolveMapKey passed earlier
-			}
-			if _, ok := seenFields[keyStr]; !ok {
-				return fmt.Errorf("maml: unknown field %q in type %s", keyStr, rv.Type())
-			}
+		if err := ds.checkUnknownFields(obj, rv.Type(), seenFields); err != nil {
+			return err
 		}
 	}
 
+	return nil
+}
+
+// checkUnknownFields iterates through the object literal's pairs and
+// returns an error if any field was not found in the seenFields map,
+// indicating an unknown field.
+func (ds *decodeState) checkUnknownFields(obj *ast.ObjectLiteral, structType reflect.Type, seenFields map[string]struct{}) error {
+	for _, pair := range obj.Pairs {
+		keyStr, err := resolveMapKey(pair.Key)
+		if err != nil {
+			// This should ideally not happen as resolveMapKey is called earlier
+			return err
+		}
+		if _, ok := seenFields[keyStr]; !ok {
+			return fmt.Errorf("maml: unknown field %q in type %s", keyStr, structType)
+		}
+	}
 	return nil
 }
 
