@@ -180,6 +180,45 @@ func TestUnmarshalStructs(t *testing.T) {
 		require.Equal(t, "", s.Ignored)
 		require.Equal(t, "preset", s.unexported)
 	})
+
+	t.Run("DisallowUnknownFields", func(t *testing.T) {
+		type SimpleStruct struct {
+			Field1 string
+			Field2 int
+		}
+
+		// Unknown field present, option NOT enabled
+		input1 := `{ Field1: "value", Field2: 123, UnknownField: "extra" }`
+		var s1 SimpleStruct
+		err := maml.Unmarshal([]byte(input1), &s1)
+		require.NoError(t, err, "should not error when DisallowUnknownFields is not set")
+		require.Equal(t, "value", s1.Field1)
+		require.Equal(t, 123, s1.Field2)
+
+		// Unknown field present, option IS enabled
+		input2 := `{ Field1: "value", Field2: 123, AnotherUnknown: true }`
+		var s2 SimpleStruct
+		err = maml.Unmarshal([]byte(input2), &s2, maml.DisallowUnknownFields())
+		require.Error(t, err, "should error when DisallowUnknownFields is set and unknown field exists")
+		require.Contains(t, err.Error(), `maml: unknown field "AnotherUnknown" in type maml_test.SimpleStruct`)
+
+		// No unknown fields, option IS enabled
+		input3 := `{ Field1: "good", Field2: 456 }`
+		var s3 SimpleStruct
+		err = maml.Unmarshal([]byte(input3), &s3, maml.DisallowUnknownFields())
+		require.NoError(t, err, "should not error when DisallowUnknownFields is set but no unknown fields are present")
+		require.Equal(t, "good", s3.Field1)
+		require.Equal(t, 456, s3.Field2)
+
+		// Multiple unknown fields, option IS enabled (should report the first one encountered)
+		input4 := `{ UnknownA: 1, Field1: "val", UnknownB: "x" }`
+		var s4 SimpleStruct
+		err = maml.Unmarshal([]byte(input4), &s4, maml.DisallowUnknownFields())
+		require.Error(t, err)
+		// The exact field reported depends on map iteration order, but it should be one of the unknowns
+		require.Contains(t, err.Error(), `maml: unknown field`)
+		require.Contains(t, err.Error(), `in type maml_test.SimpleStruct`)
+	})
 }
 
 func TestUnmarshalMaxDepth(t *testing.T) {

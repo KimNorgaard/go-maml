@@ -79,12 +79,13 @@ func (d *Decoder) decodeDocument(doc *ast.Document, v any) error {
 	if !ok {
 		return fmt.Errorf("maml: document root is not a valid expression statement")
 	}
-	ds := &decodeState{depth: o.maxDepth}
+	ds := &decodeState{depth: o.maxDepth, opts: &o}
 	return ds.mapValue(stmt.Expression, rv.Elem())
 }
 
 type decodeState struct {
 	depth int
+	opts  *options
 }
 
 func (ds *decodeState) mapValue(expr ast.Expression, rv reflect.Value) error { //nolint:gocyclo,funlen
@@ -363,6 +364,8 @@ func (ds *decodeState) resolveFieldPath(rv reflect.Value, idx []int) (reflect.Va
 
 func (ds *decodeState) mapStruct(obj *ast.ObjectLiteral, rv reflect.Value) error {
 	fields := cachedFields(rv.Type())
+	seenFields := make(map[string]struct{})
+
 	for _, pair := range obj.Pairs {
 		keyStr, err := resolveMapKey(pair.Key)
 		if err != nil {
@@ -379,9 +382,24 @@ func (ds *decodeState) mapStruct(obj *ast.ObjectLiteral, rv reflect.Value) error
 				if err := ds.mapValue(pair.Value, finalFieldVal); err != nil {
 					return err
 				}
+				seenFields[keyStr] = struct{}{}
 			}
 		}
 	}
+
+	// Check for unknown fields if disallowUnknownFields is enabled
+	if ds.opts.disallowUnknownFields {
+		for _, pair := range obj.Pairs {
+			keyStr, err := resolveMapKey(pair.Key)
+			if err != nil {
+				return err // Should not happen if resolveMapKey passed earlier
+			}
+			if _, ok := seenFields[keyStr]; !ok {
+				return fmt.Errorf("maml: unknown field %q in type %s", keyStr, rv.Type())
+			}
+		}
+	}
+
 	return nil
 }
 

@@ -12,6 +12,10 @@ type options struct {
 	// A nil value means the default indentation is used.
 	// A value of 0 means compact output.
 	indent *int
+
+	// disallowUnknownFields specifies whether the decoder should
+	// return an error when encountering unknown fields in the MAML document.
+	disallowUnknownFields bool
 }
 
 // Option is a functional option for configuring an Encoder or Decoder.
@@ -28,6 +32,15 @@ func MaxDepth(n int) Option {
 			return fmt.Errorf("maml: max depth must be a positive integer")
 		}
 		o.maxDepth = n
+		return nil
+	}
+}
+
+// DisallowUnknownFields returns an Option that causes the decoder to
+// return an error when encountering unknown fields in the MAML document.
+func DisallowUnknownFields() Option {
+	return func(o *options) error {
+		o.disallowUnknownFields = true
 		return nil
 	}
 }
