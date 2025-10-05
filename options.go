@@ -16,6 +16,24 @@ type options struct {
 	// disallowUnknownFields specifies whether the decoder should
 	// return an error when encountering unknown fields in the MAML document.
 	disallowUnknownFields bool
+
+	// inlineArrays specifies whether the encoder should format arrays on a
+	// single line.
+	inlineArrays bool
+
+	// inlineStrings specifies whether the encoder should inline strings in the
+	// output.
+	inlineStrings bool
+
+	// useFieldCommas specifies whether the encoder should
+	// separate object pairs and array elements with a comma.
+	useFieldCommas bool
+
+	// useTrailingCommas specifies whether the encoder should
+	// output a comma after the last element in arrays and objects
+	// when pretty-printing. This option only takes effect if
+	// UseFieldCommas is also enabled.
+	useTrailingCommas bool
 }
 
 // Option is a functional option for configuring an Encoder or Decoder.
@@ -56,6 +74,47 @@ func Indent(n int) Option {
 			return fmt.Errorf("maml: indent spaces cannot be negative")
 		}
 		o.indent = &n
+		return nil
+	}
+}
+
+// InlineArrays returns an Option that causes the encoder to
+// inline arrays in the output.
+func InlineArrays() Option {
+	return func(o *options) error {
+		o.inlineArrays = true
+		return nil
+	}
+}
+
+// InlineStrings returns an Option that causes the encoder to
+// inline strings in the output.
+func InlineStrings() Option {
+	return func(o *options) error {
+		o.inlineStrings = true
+		return nil
+	}
+}
+
+// UseFieldCommas returns an Option that causes the encoder to
+// separate objects and object paris with a comma.
+//
+// This has no effect on inlined arrays. It only affects end of line
+// separators (commas).
+func UseFieldCommas() Option {
+	return func(o *options) error {
+		o.useFieldCommas = true
+		return nil
+	}
+}
+
+// UseTrailingCommas returns an Option that causes the encoder to
+// output a comma after the last element in arrays and objects
+// when pretty-printing. This option only takes effect if
+// UseFieldCommas is also enabled.
+func UseTrailingCommas() Option {
+	return func(o *options) error {
+		o.useTrailingCommas = true
 		return nil
 	}
 }

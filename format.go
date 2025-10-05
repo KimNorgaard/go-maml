@@ -13,10 +13,12 @@ type formatter struct {
 	w      io.Writer
 	indent string
 	depth  int
+	opts   *options
 }
 
 const (
 	defaultIndent = 2
+	tripleQuote   = `"""`
 )
 
 // newFormatter returns a new formatter that writes to w.
@@ -29,7 +31,7 @@ func newFormatter(w io.Writer, opts *options) *formatter {
 	if spaces > 0 {
 		indentStr = strings.Repeat(" ", spaces)
 	}
-	return &formatter{w: w, indent: indentStr}
+	return &formatter{w: w, indent: indentStr, opts: opts}
 }
 
 // format writes the MAML string representation of the AST node to the writer.
@@ -79,7 +81,10 @@ func (f *formatter) writeNode(node ast.Node) error {
 		return f.writeArray(n)
 
 	case *ast.StringLiteral:
-		return f.write(n.String())
+		if f.opts.inlineStrings || f.indent == "" || !strings.ContainsRune(n.Value, '\n') || strings.Contains(n.Value, `"""`) {
+			return f.write(n.String())
+		}
+		return f.writeMultilineString(n.Value)
 
 	case *ast.IntegerLiteral, *ast.FloatLiteral, *ast.BooleanLiteral:
 		return f.write(n.TokenLiteral())
@@ -92,7 +97,13 @@ func (f *formatter) writeNode(node ast.Node) error {
 	}
 }
 
-func (f *formatter) writePrettyObject(obj *ast.ObjectLiteral) error {
+// writeMultilineString formats and writes a string value, deciding between standard
+// and multiline string literals based on options and content.
+func (f *formatter) writeMultilineString(s string) error {
+	return f.write(tripleQuote + "\n" + s + tripleQuote)
+}
+
+func (f *formatter) writePrettyObject(obj *ast.ObjectLiteral) error { //nolint:gocognit
 	f.depth++
 	for i, pair := range obj.Pairs {
 		if err := f.write("\n"); err != nil {
@@ -107,9 +118,15 @@ func (f *formatter) writePrettyObject(obj *ast.ObjectLiteral) error {
 		if err := f.writeNode(pair.Value); err != nil {
 			return err
 		}
-		if i < len(obj.Pairs)-1 {
-			if err := f.write(","); err != nil {
-				return err
+		if f.opts.useFieldCommas {
+			if i < len(obj.Pairs)-1 {
+				if err := f.write(","); err != nil {
+					return err
+				}
+			} else if f.opts.useTrailingCommas {
+				if err := f.write(","); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -160,7 +177,7 @@ func (f *formatter) writeObject(obj *ast.ObjectLiteral) error {
 	return f.write("}")
 }
 
-func (f *formatter) writePrettyArray(arr *ast.ArrayLiteral) error {
+func (f *formatter) writePrettyArray(arr *ast.ArrayLiteral) error { //nolint:gocognit
 	f.depth++
 	for i, elem := range arr.Elements {
 		if err := f.write("\n"); err != nil {
@@ -172,9 +189,15 @@ func (f *formatter) writePrettyArray(arr *ast.ArrayLiteral) error {
 		if err := f.writeNode(elem); err != nil {
 			return err
 		}
-		if i < len(arr.Elements)-1 {
-			if err := f.write(","); err != nil {
-				return err
+		if f.opts.useFieldCommas {
+			if i < len(arr.Elements)-1 {
+				if err := f.write(","); err != nil {
+					return err
+				}
+			} else if f.opts.useTrailingCommas {
+				if err := f.write(","); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -205,11 +228,16 @@ func (f *formatter) writeArray(arr *ast.ArrayLiteral) error {
 	}
 
 	if len(arr.Elements) > 0 {
-		if f.indent != "" {
+		switch {
+		case f.opts.inlineArrays:
+			if err := f.writeCompactArray(arr); err != nil {
+				return err
+			}
+		case f.indent != "":
 			if err := f.writePrettyArray(arr); err != nil {
 				return err
 			}
-		} else {
+		default:
 			if err := f.writeCompactArray(arr); err != nil {
 				return err
 			}

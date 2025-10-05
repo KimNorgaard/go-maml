@@ -28,7 +28,7 @@ func TestMarshal_IndentOption(t *testing.T) {
 		s := string(b)
 
 		require.Contains(t, s, `Name: "Test"`)
-		require.Contains(t, s, "Data: [\n    1,\n    2\n  ]")
+		require.Contains(t, s, "Data: [\n    1\n    2\n  ]")
 		require.True(t, strings.HasPrefix(s, "{"), "should start with {")
 		require.True(t, strings.HasSuffix(s, "}"), "should end with }")
 	})
@@ -49,7 +49,7 @@ func TestMarshal_IndentOption(t *testing.T) {
 		s := string(b)
 
 		require.Contains(t, s, `Name: "Test"`)
-		require.Contains(t, s, "Data: [\n        1,\n        2\n    ]")
+		require.Contains(t, s, "Data: [\n        1\n        2\n    ]")
 		require.True(t, strings.HasPrefix(s, "{"), "should start with {")
 		require.True(t, strings.HasSuffix(s, "}"), "should end with }")
 	})
