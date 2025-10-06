@@ -30,7 +30,8 @@ type Expression interface {
 
 // Document is the root node of a MAML document.
 type Document struct {
-	Statements []Statement
+	HeadComments []*Comment
+	Statements   []Statement
 }
 
 // TokenLiteral returns the literal value of the token associated with the node.
@@ -155,11 +156,24 @@ func (ol *ObjectLiteral) String() string {
 	return out.String()
 }
 
+// Comment represents a # comment.
+type Comment struct {
+	Token token.Token
+	Value string
+}
+
+func (c *Comment) TokenLiteral() string { return c.Token.Literal }
+func (c *Comment) String() string       { return c.Value }
+
 // KeyValueExpression represents a key-value pair in an object literal.
 type KeyValueExpression struct {
-	Token token.Token // The ':' token
-	Key   Expression
-	Value Expression
+	Token          token.Token // The ':' token
+	Key            Expression
+	Value          Expression
+	HeadComments   []*Comment
+	LineComment    *Comment
+	FootComments   []*Comment
+	NewlinesBefore int // Used to track the number of newlines before the key-value pair
 }
 
 func (pe *KeyValueExpression) expressionNode()      {}

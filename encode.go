@@ -47,6 +47,12 @@ func (e *Encoder) Encode(in any) error {
 		}
 	}
 
+	// If the input is already an AST node, format it directly.
+	if node, ok := in.(ast.Node); ok {
+		f := newFormatter(e.w, &o)
+		return f.format(node)
+	}
+
 	es := &encodeState{seen: make(map[uintptr]struct{})}
 	node, err := es.marshalValue(reflect.ValueOf(in))
 	if err != nil {
@@ -90,6 +96,9 @@ func (e *encodeState) marshalCustom(v reflect.Value, u Marshaler) (ast.Node, err
 		return &ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
 	}
 
+	// This check is defensive. The current parser implementation is designed
+	// to error out before ever producing a document with multiple statements.
+	// This safeguard exists for future parser enhancements.
 	if len(doc.Statements) != 1 {
 		return nil, &MarshalerError{
 			Type: v.Type(),

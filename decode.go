@@ -46,26 +46,39 @@ func (d *Decoder) Decode(out any) error {
 		return fmt.Errorf("maml: Decode(nil reader)")
 	}
 
+	o := options{}
+	for _, opt := range d.opts {
+		if err := opt(&o); err != nil {
+			return err
+		}
+	}
+
 	l := lexer.New(d.r)
-	p := parser.New(l)
+	parseOpts := []parser.Option{}
+	if o.parseComments {
+		parseOpts = append(parseOpts, parser.WithParseComments())
+	}
+	p := parser.New(l, parseOpts...)
+
 	doc := p.Parse()
 
 	if len(p.Errors()) > 0 {
 		return p.Errors()
 	}
 
-	return d.decodeDocument(doc, out)
+	return d.decodeDocument(doc, out, &o)
 }
 
 // decodeDocument processes the options and maps the AST to a Go value.
-func (d *Decoder) decodeDocument(doc *ast.Document, v any) error {
-	o := options{
-		maxDepth: defaultMaxDepth,
+func (d *Decoder) decodeDocument(doc *ast.Document, v any, o *options) error {
+	// If the target is an *ast.Document, just assign it.
+	if docPtr, ok := v.(**ast.Document); ok {
+		*docPtr = doc
+		return nil
 	}
-	for _, opt := range d.opts {
-		if err := opt(&o); err != nil {
-			return err
-		}
+
+	if o.maxDepth == 0 {
+		o.maxDepth = defaultMaxDepth
 	}
 
 	rv := reflect.ValueOf(v)
@@ -79,7 +92,7 @@ func (d *Decoder) decodeDocument(doc *ast.Document, v any) error {
 	if !ok {
 		return fmt.Errorf("maml: document root is not a valid expression statement")
 	}
-	ds := &decodeState{depth: o.maxDepth, opts: &o}
+	ds := &decodeState{depth: o.maxDepth, opts: o}
 	return ds.mapValue(stmt.Expression, rv.Elem())
 }
 

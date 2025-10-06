@@ -29,3 +29,4 @@ comment:
 
 ignore:
   - internal/ast
+  - internal/testutil

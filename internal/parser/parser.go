@@ -13,6 +13,16 @@ import (
 
 type prefixParseFn func() ast.Expression
 
+// Option is a function that configures a Parser.
+type Option func(*Parser)
+
+// WithParseComments enables comment parsing.
+func WithParseComments() Option {
+	return func(p *Parser) {
+		p.parseComments = true
+	}
+}
+
 // Parser holds the state of the parser.
 type Parser struct {
 	l      *lexer.Lexer
@@ -22,13 +32,19 @@ type Parser struct {
 	peekToken token.Token
 
 	prefixParseFns map[token.Type]prefixParseFn
+
+	parseComments bool
 }
 
 // New creates a new parser.
-func New(l *lexer.Lexer) *Parser {
+func New(l *lexer.Lexer, opts ...Option) *Parser {
 	p := &Parser{
 		l:      l,
 		errors: errors.ParseErrors{},
+	}
+
+	for _, opt := range opts {
+		opt(p)
 	}
 
 	p.prefixParseFns = make(map[token.Type]prefixParseFn)
@@ -62,6 +78,12 @@ func (p *Parser) Parse() *ast.Document {
 
 	p.skip(token.NEWLINE)
 
+	// When parsing with comments, they can appear before the main value.
+	if p.parseComments {
+		document.HeadComments = p.consumeComments()
+		p.skip(token.NEWLINE)
+	}
+
 	if p.curTokenIs(token.EOF) {
 		return document
 	}
@@ -83,9 +105,41 @@ func (p *Parser) Parse() *ast.Document {
 func (p *Parser) nextToken() {
 	p.curToken = p.peekToken
 	p.peekToken = p.l.NextToken()
-	for p.curTokenIs(token.COMMENT) {
+	if !p.parseComments {
+		for p.curTokenIs(token.COMMENT) {
+			p.nextToken()
+		}
+	}
+}
+
+// consumeComments consumes a block of comments, including the newlines between them.
+func (p *Parser) consumeComments() []*ast.Comment {
+	comments := []*ast.Comment{}
+COMMENTS:
+	for {
+		switch {
+		case p.curTokenIs(token.COMMENT):
+			comment := &ast.Comment{Token: p.curToken, Value: p.curToken.Literal}
+			comments = append(comments, comment)
+			p.nextToken() // consume comment token
+		case p.curTokenIs(token.NEWLINE) && p.peekTokenIs(token.COMMENT):
+			// If the newline is followed by another comment, consume the newline and continue the loop.
+			p.nextToken()
+		default:
+			break COMMENTS // Not a comment or a newline followed by a comment, so the block is done.
+		}
+	}
+	return comments
+}
+
+// consumeNewlines consumes one or more newline tokens and returns the count.
+func (p *Parser) consumeNewlines() int {
+	count := 0
+	for p.curTokenIs(token.NEWLINE) {
+		count++
 		p.nextToken()
 	}
+	return count
 }
 
 func (p *Parser) parseStatement() ast.Statement {
@@ -209,14 +263,37 @@ func (p *Parser) parseExpressionList(end token.Type) []ast.Expression {
 	return list
 }
 
-func (p *Parser) parseObjectLiteral() ast.Expression {
+func (p *Parser) parseObjectLiteral() ast.Expression { //nolint:gocognit
 	obj := &ast.ObjectLiteral{Token: p.curToken, Pairs: []*ast.KeyValueExpression{}}
 	keys := make(map[string]bool)
 	p.nextToken() // Consume '{'
 
-	p.skip(token.NEWLINE)
 	for !p.curTokenIs(token.RBRACE) && !p.curTokenIs(token.EOF) {
-		pair := p.parseKeyValuePair()
+		newlines := p.consumeNewlines()
+		if p.curTokenIs(token.COMMA) {
+			p.nextToken()
+			newlines += p.consumeNewlines()
+		}
+
+		if p.curTokenIs(token.RBRACE) {
+			break
+		}
+
+		var headComments []*ast.Comment
+		if p.parseComments {
+			// A key-value pair can be preceded by multiple comment blocks,
+			// separated by newlines. We need to consume all of them.
+			for p.curTokenIs(token.COMMENT) {
+				headComments = append(headComments, p.consumeComments()...)
+				p.skip(token.NEWLINE)
+			}
+		}
+
+		if p.curTokenIs(token.RBRACE) {
+			break
+		}
+
+		pair := p.parseKeyValuePair(headComments, newlines)
 		if pair != nil {
 			var keyStr string
 			switch k := pair.Key.(type) {
@@ -231,14 +308,22 @@ func (p *Parser) parseObjectLiteral() ast.Expression {
 			}
 			keys[keyStr] = true
 			obj.Pairs = append(obj.Pairs, pair)
-		} else {
-			// Error already reported. Recover to the next separator or end of object.
-			for !p.curTokenIs(token.NEWLINE) && !p.curTokenIs(token.COMMA) && !p.curTokenIs(token.RBRACE) && !p.curTokenIs(token.EOF) {
-				p.nextToken()
+			// After parsing a pair, check for foot comments that might follow.
+			if p.parseComments {
+				// After parsing a pair, check for foot comments that might follow,
+				// which may be preceded by an optional comma.
+				if p.curTokenIs(token.COMMA) && p.peekTokenIs(token.NEWLINE) {
+					p.nextToken() // consume comma
+				}
+				// A foot comment must be on a new line.
+				if p.curTokenIs(token.NEWLINE) && p.peekTokenIs(token.COMMENT) {
+					p.nextToken() // consume newline
+					pair.FootComments = p.consumeComments()
+				}
 			}
+		} else {
+			p.nextToken()
 		}
-
-		p.skip(token.NEWLINE, token.COMMA)
 	}
 
 	if !p.curTokenIs(token.RBRACE) {
@@ -249,7 +334,7 @@ func (p *Parser) parseObjectLiteral() ast.Expression {
 	return obj
 }
 
-func (p *Parser) parseKeyValuePair() *ast.KeyValueExpression {
+func (p *Parser) parseKeyValuePair(headComments []*ast.Comment, newlinesBefore int) *ast.KeyValueExpression {
 	key := p.parseObjectKey()
 	if key == nil {
 		return nil
@@ -267,7 +352,25 @@ func (p *Parser) parseKeyValuePair() *ast.KeyValueExpression {
 		return nil
 	}
 
-	return &ast.KeyValueExpression{Key: key, Value: value}
+	kvp := &ast.KeyValueExpression{Key: key, Value: value, HeadComments: headComments, NewlinesBefore: newlinesBefore}
+
+	if p.parseComments {
+		// A line comment must not be separated by a newline from the value.
+		// It can appear before or after an optional comma.
+		if p.curTokenIs(token.COMMENT) {
+			// Case: `key: value # comment`
+			kvp.LineComment = &ast.Comment{Token: p.curToken, Value: p.curToken.Literal}
+			p.nextToken() // consume comment
+		} else if p.curTokenIs(token.COMMA) && p.peekTokenIs(token.COMMENT) {
+			// Case: `key: value, # comment`. Here we consume the comma as well
+			// as it is part of the "line" that the comment is on.
+			p.nextToken() // consume comma
+			kvp.LineComment = &ast.Comment{Token: p.curToken, Value: p.curToken.Literal}
+			p.nextToken() // consume comment
+		}
+	}
+
+	return kvp
 }
 
 func (p *Parser) parseObjectKey() ast.Expression {
@@ -314,4 +417,8 @@ func (p *Parser) appendError(msg string) {
 
 func (p *Parser) curTokenIs(t token.Type) bool {
 	return p.curToken.Type == t
+}
+
+func (p *Parser) peekTokenIs(t token.Type) bool {
+	return p.peekToken.Type == t
 }

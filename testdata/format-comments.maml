@@ -1,0 +1,12 @@
+# Top-level comment.
+{
+  # Head comment for key1
+  # Second line of head comment
+  key1: "value1", # Line comment for key1
+
+  key2: "value2",
+  # Foot comment for key2
+
+  # Head comment for key3
+  key3: "value3"
+}

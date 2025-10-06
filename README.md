@@ -129,12 +129,74 @@ err := maml.Unmarshal(mamlInput, &user)
 // user.Address.Street == "123 Main St" (matched via case-insensitive name)
 ```
 
+## Handling Comments and Programmatic Manipulation
+
+The library provides two primary ways to work with MAML, depending on your
+needs.
+
+### Data-Only Decoding
+
+For the common case of decoding a MAML document into a Go struct, use the
+`Unmarshal` function. This is the simplest and most direct approach when you
+only care about the data values and not the comments or original formatting.
+
+```go
+var cfg MyConfig
+err := maml.Unmarshal(data, &cfg)
+// cfg is now populated with data; comments are discarded.
+```
+
+### Full-Fidelity Round-Trips
+
+For use cases that require programmatic manipulation of a MAML file while
+preserving comments and spacing, such as in linters, formatters, or
+configuration editors, use the `Parse` function. This function decodes the
+source into an Abstract Syntax Tree (AST) that retains all information from the
+original document.
+
+The returned `*ast.Document` can be modified and then written back out using the
+`Marshal` function.
+
+```go
+// Source MAML with comments
+var mamlInput = []byte(`
+{
+  # Port to listen on
+  port: 8080
+}
+`)
+
+// 1. Parse the source into an AST to preserve comments
+doc, err := maml.Parse(mamlInput)
+if err != nil {
+	log.Fatalf("error: %v", err)
+}
+
+// At this point, the 'doc' can be programmatically inspected or modified.
+// This is an advanced use case for tools that need to work with the AST.
+// For details, see the internal/ast package.
+
+// 2. Marshal the AST back to bytes, preserving the original comment
+output, err := maml.Marshal(doc, maml.Indent(2))
+if err != nil {
+	log.Fatalf("error: %v", err)
+}
+
+fmt.Println(string(output))
+// Output:
+// {
+//   # Port to listen on
+//   port: 8080
+// }
+```
+
 ## Features
 
 *   Familiar `Marshal`/`Unmarshal`/`NewEncoder`/`NewDecoder` interface.
 *   Full support for `maml.Marshaler` and `maml.Unmarshaler` interfaces.
 *   Struct tags for custom field mapping (`maml:"key,omitempty"`).
 *   Support for anonymous embedded structs, following `encoding/json` precedence rules.
+*   Comment-preserving round-trips via a dedicated `Parse` function.
 *   Provides structured parse errors with line and column numbers.
 *   Configurable encoding options, such as indentation.
 

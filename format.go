@@ -56,9 +56,15 @@ func (f *formatter) writeIndent() error {
 	return nil
 }
 
-func (f *formatter) writeNode(node ast.Node) error {
+func (f *formatter) writeNode(node ast.Node) error { //nolint:gocognit
 	switch n := node.(type) {
 	case *ast.Document:
+		for _, comment := range n.HeadComments {
+			if err := f.write("# " + comment.Value + "\n"); err != nil {
+				return err
+			}
+		}
+
 		for i, stmt := range n.Statements {
 			if err := f.writeNode(stmt); err != nil {
 				return err
@@ -103,38 +109,107 @@ func (f *formatter) writeMultilineString(s string) error {
 	return f.write(tripleQuote + "\n" + s + tripleQuote)
 }
 
-func (f *formatter) writePrettyObject(obj *ast.ObjectLiteral) error { //nolint:gocognit
+func (f *formatter) writePrettyObject(obj *ast.ObjectLiteral) error {
 	f.depth++
 	for i, pair := range obj.Pairs {
+		if err := f.writePairPrefix(i, pair); err != nil {
+			return err
+		}
+		if err := f.writePairKeyValue(pair); err != nil {
+			return err
+		}
+		if err := f.writePairSuffix(i, len(obj.Pairs), pair); err != nil {
+			return err
+		}
+		if err := f.writePairFootComments(pair); err != nil {
+			return err
+		}
+	}
+	f.depth--
+
+	if len(obj.Pairs) > 0 {
+		if err := f.write("\n"); err != nil {
+			return err
+		}
+	}
+	return f.writeIndent()
+}
+
+// writePairPrefix handles writing newlines, head comments, and indentation before the key.
+func (f *formatter) writePairPrefix(i int, pair *ast.KeyValueExpression) error {
+	// Use the recorded number of newlines from the source to preserve vertical spacing.
+	numNewlines := pair.NewlinesBefore
+	if i == 0 {
+		// First pair is always one newline after '{'.
+		numNewlines = 1
+	} else if numNewlines == 0 {
+		// Subsequent pairs need at least one newline for pretty printing.
+		numNewlines = 1
+	}
+
+	for j := 0; j < numNewlines; j++ {
+		if err := f.write("\n"); err != nil {
+			return err
+		}
+	}
+
+	for _, comment := range pair.HeadComments {
+		if err := f.writeIndent(); err != nil {
+			return err
+		}
+		if err := f.write("# " + comment.Value + "\n"); err != nil {
+			return err
+		}
+	}
+
+	return f.writeIndent()
+}
+
+// writePairKeyValue handles writing the "key: value" part of a pair.
+func (f *formatter) writePairKeyValue(pair *ast.KeyValueExpression) error {
+	if err := f.write(pair.Key.String() + ": "); err != nil {
+		return err
+	}
+	return f.writeNode(pair.Value)
+}
+
+// writePairSuffix handles writing commas and line comments after the value.
+func (f *formatter) writePairSuffix(i, pairCount int, pair *ast.KeyValueExpression) error {
+	if f.opts.useFieldCommas {
+		isLast := i == pairCount-1
+		if !isLast {
+			if err := f.write(","); err != nil {
+				return err
+			}
+		} else if f.opts.useTrailingCommas {
+			if err := f.write(","); err != nil {
+				return err
+			}
+		}
+	}
+
+	if pair.LineComment != nil {
+		if err := f.write(" # " + pair.LineComment.Value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writePairFootComments handles writing foot comments after a key-value pair.
+func (f *formatter) writePairFootComments(pair *ast.KeyValueExpression) error {
+	for _, comment := range pair.FootComments {
 		if err := f.write("\n"); err != nil {
 			return err
 		}
 		if err := f.writeIndent(); err != nil {
 			return err
 		}
-		if err := f.write(pair.Key.String() + ": "); err != nil {
+		if err := f.write("# " + comment.Value); err != nil {
 			return err
 		}
-		if err := f.writeNode(pair.Value); err != nil {
-			return err
-		}
-		if f.opts.useFieldCommas {
-			if i < len(obj.Pairs)-1 {
-				if err := f.write(","); err != nil {
-					return err
-				}
-			} else if f.opts.useTrailingCommas {
-				if err := f.write(","); err != nil {
-					return err
-				}
-			}
-		}
 	}
-	f.depth--
-	if err := f.write("\n"); err != nil {
-		return err
-	}
-	return f.writeIndent()
+	return nil
 }
 
 func (f *formatter) writeCompactObject(obj *ast.ObjectLiteral) error {

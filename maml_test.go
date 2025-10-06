@@ -59,6 +59,12 @@ func TestMarshal_IndentOption(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "indent spaces cannot be negative")
 	})
+
+	t.Run("Invalid MaxDepth option", func(t *testing.T) {
+		_, err := maml.Marshal(v, maml.MaxDepth(-1))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "max depth must be a positive integer")
+	})
 }
 
 // Helper types for custom marshaler tests
@@ -379,6 +385,13 @@ func (c *CustomUnmarshalError) UnmarshalMAML(data []byte) error {
 	return errors.New("custom unmarshal error")
 }
 
+type CustomMultipleStatements struct{}
+
+func (c CustomMultipleStatements) MarshalMAML() ([]byte, error) {
+	// Return two complete, valid MAML documents. The parser will create two statements.
+	return []byte("{key: 1}\n{key: 2}"), nil
+}
+
 func TestUnmarshal_CustomUnmarshaler(t *testing.T) {
 	t.Run("Unmarshaler with pointer receiver", func(t *testing.T) {
 		input := `{ custom: "hello world" }`
@@ -414,5 +427,62 @@ func TestUnmarshal_CustomUnmarshaler(t *testing.T) {
 		err := maml.Unmarshal([]byte(input), &v)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "custom unmarshal error")
+	})
+
+	t.Run("Marshaler that returns multiple statements", func(t *testing.T) {
+		v := CustomMultipleStatements{}
+		_, err := maml.Marshal(v)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "unexpected token after main value")
+	})
+}
+
+func TestParse(t *testing.T) {
+	t.Run("Parse valid MAML", func(t *testing.T) {
+		input := `{ key: "value" }`
+		doc, err := maml.Parse([]byte(input))
+		require.NoError(t, err)
+		require.NotNil(t, doc)
+		require.Len(t, doc.Statements, 1)
+	})
+
+	t.Run("Parse invalid MAML", func(t *testing.T) {
+		input := `{ key: "value }` // Unterminated string
+		_, err := maml.Parse([]byte(input))
+		require.Error(t, err)
+	})
+
+	t.Run("Parse empty input", func(t *testing.T) {
+		input := ``
+		doc, err := maml.Parse([]byte(input))
+		require.NoError(t, err)
+		require.NotNil(t, doc)
+		require.Empty(t, doc.Statements)
+		require.Empty(t, doc.HeadComments)
+	})
+
+	t.Run("Round-trip with comments", func(t *testing.T) {
+		input := `
+# Head comment
+{
+  # Key 1 head comment
+  key1: "value1" # Key 1 line comment
+
+  key2: "value2"
+  # Key 2 foot comment
+}
+`
+		doc, err := maml.Parse([]byte(input))
+		require.NoError(t, err)
+
+		// Marshal it back out
+		output, err := maml.Marshal(doc, maml.Indent(2))
+		require.NoError(t, err)
+
+		s := string(output)
+		require.Contains(t, s, "# Head comment")
+		require.Contains(t, s, "# Key 1 head comment")
+		require.Contains(t, s, "# Key 1 line comment")
+		require.Contains(t, s, "# Key 2 foot comment")
 	})
 }
