@@ -115,16 +115,18 @@ func (p *Parser) nextToken() {
 // consumeComments consumes a block of comments, including the newlines between them.
 func (p *Parser) consumeComments() []*ast.Comment {
 	comments := []*ast.Comment{}
+COMMENTS:
 	for {
-		if p.curTokenIs(token.COMMENT) {
+		switch {
+		case p.curTokenIs(token.COMMENT):
 			comment := &ast.Comment{Token: p.curToken, Value: p.curToken.Literal}
 			comments = append(comments, comment)
 			p.nextToken() // consume comment token
-		} else if p.curTokenIs(token.NEWLINE) && p.peekTokenIs(token.COMMENT) {
+		case p.curTokenIs(token.NEWLINE) && p.peekTokenIs(token.COMMENT):
 			// If the newline is followed by another comment, consume the newline and continue the loop.
 			p.nextToken()
-		} else {
-			break // Not a comment or a newline followed by a comment, so the block is done.
+		default:
+			break COMMENTS // Not a comment or a newline followed by a comment, so the block is done.
 		}
 	}
 	return comments
@@ -261,7 +263,7 @@ func (p *Parser) parseExpressionList(end token.Type) []ast.Expression {
 	return list
 }
 
-func (p *Parser) parseObjectLiteral() ast.Expression {
+func (p *Parser) parseObjectLiteral() ast.Expression { //nolint:gocognit
 	obj := &ast.ObjectLiteral{Token: p.curToken, Pairs: []*ast.KeyValueExpression{}}
 	keys := make(map[string]bool)
 	p.nextToken() // Consume '{'
