@@ -34,6 +34,10 @@ type options struct {
 	// when pretty-printing. This option only takes effect if
 	// UseFieldCommas is also enabled.
 	useTrailingCommas bool
+
+	// parseComments specifies whether the parser should parse and include
+	// comments in the AST. This is used for comment-preserving round-trips.
+	parseComments bool
 }
 
 // Option is a functional option for configuring an Encoder or Decoder.
@@ -115,6 +119,16 @@ func UseFieldCommas() Option {
 func UseTrailingCommas() Option {
 	return func(o *options) error {
 		o.useTrailingCommas = true
+		return nil
+	}
+}
+
+// ParseComments returns an Option that enables the parsing of comments.
+// When this option is used with Unmarshal and the destination is an
+// *ast.Document, the resulting AST will contain all comments from the source.
+func ParseComments() Option {
+	return func(o *options) error {
+		o.parseComments = true
 		return nil
 	}
 }

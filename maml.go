@@ -2,6 +2,10 @@ package maml
 
 import (
 	"bytes"
+
+	"github.com/KimNorgaard/go-maml/internal/ast"
+	"github.com/KimNorgaard/go-maml/internal/lexer"
+	"github.com/KimNorgaard/go-maml/internal/parser"
 )
 
 // Marshaler is the interface implemented by types that can marshal themselves
@@ -68,4 +72,22 @@ func Marshal(in any, opts ...Option) (out []byte, err error) {
 func Unmarshal(in []byte, out any, opts ...Option) error {
 	dec := NewDecoder(bytes.NewReader(in), opts...)
 	return dec.Decode(out)
+}
+
+// Parse parses the MAML-encoded data and returns the root AST node.
+// This function is intended for use cases where the MAML document needs
+// to be programmatically inspected or manipulated while preserving full
+// fidelity, including comments and spacing.
+//
+// The returned ast.Node can then be passed to Marshal to produce formatted
+// MAML output.
+func Parse(in []byte) (*ast.Document, error) {
+	l := lexer.New(bytes.NewReader(in))
+	// Always parse with comments, as that's the primary use case for this function.
+	p := parser.New(l, parser.WithParseComments())
+	doc := p.Parse()
+	if len(p.Errors()) > 0 {
+		return nil, p.Errors()
+	}
+	return doc, nil
 }

@@ -696,6 +696,89 @@ func TestSyntaxErrors(t *testing.T) {
 	}
 }
 
+func TestObjectParsingWithComments(t *testing.T) {
+	input := `{
+	  # Head comment for key1
+	  # Second line of head comment
+	  key1: "value1" # Line comment for key1
+
+	  key2: "value2"
+	  # Foot comment for key2
+
+	  # Head comment for key3
+	  key3: "value3"
+	}`
+
+	l := lexer.New(strings.NewReader(input))
+	p := parser.New(l, parser.WithParseComments())
+	doc := p.Parse()
+
+	require.Empty(t, p.Errors(), "parser should not have errors")
+	require.NotNil(t, doc)
+	require.Len(t, doc.Statements, 1)
+
+	stmt, ok := doc.Statements[0].(*ast.ExpressionStatement)
+	require.True(t, ok)
+
+	obj, ok := stmt.Expression.(*ast.ObjectLiteral)
+	require.True(t, ok)
+	require.Len(t, obj.Pairs, 3)
+
+	// Test key1
+	pair1 := obj.Pairs[0]
+	require.Len(t, pair1.HeadComments, 2)
+	require.Equal(t, "Head comment for key1", pair1.HeadComments[0].Value)
+	require.Equal(t, "Second line of head comment", pair1.HeadComments[1].Value)
+	require.NotNil(t, pair1.LineComment)
+	require.Equal(t, "Line comment for key1", pair1.LineComment.Value)
+	require.Empty(t, pair1.FootComments)
+
+	// Test key2
+	pair2 := obj.Pairs[1]
+	require.Empty(t, pair2.HeadComments)
+	require.Nil(t, pair2.LineComment)
+	require.Len(t, pair2.FootComments, 1)
+	require.Equal(t, "Foot comment for key2", pair2.FootComments[0].Value)
+
+	// Test key3
+	pair3 := obj.Pairs[2]
+	require.Len(t, pair3.HeadComments, 1)
+	require.Equal(t, "Head comment for key3", pair3.HeadComments[0].Value)
+	require.Nil(t, pair3.LineComment)
+	require.Empty(t, pair3.FootComments)
+}
+
+func TestLineCommentAfterComma(t *testing.T) {
+	input := `{
+		key1: "value1", # a comment
+		key2: "value2"
+	}`
+
+	l := lexer.New(strings.NewReader(input))
+	p := parser.New(l, parser.WithParseComments())
+	doc := p.Parse()
+
+	require.Empty(t, p.Errors(), "parser should not have errors")
+	require.NotNil(t, doc)
+
+	stmt, ok := doc.Statements[0].(*ast.ExpressionStatement)
+	require.True(t, ok)
+
+	obj, ok := stmt.Expression.(*ast.ObjectLiteral)
+	require.True(t, ok)
+	require.Len(t, obj.Pairs, 2)
+
+	// Test key1
+	pair1 := obj.Pairs[0]
+	require.NotNil(t, pair1.LineComment, "key1 should have a line comment")
+	require.Equal(t, "a comment", pair1.LineComment.Value)
+
+	// Test key2
+	pair2 := obj.Pairs[1]
+	require.Nil(t, pair2.LineComment, "key2 should not have a line comment")
+	require.Empty(t, pair2.HeadComments, "key2 should not have the comment from key1 as a head comment")
+}
+
 func BenchmarkParse(b *testing.B) {
 	benchmarkInput, err := testutil.ReadTestData("large.maml")
 	require.NoError(b, err)

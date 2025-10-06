@@ -1,0 +1,2884 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>go-maml: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/KimNorgaard/go-maml/decode.go (90.7%)</option>
+				
+				<option value="file1">github.com/KimNorgaard/go-maml/encode.go (88.7%)</option>
+				
+				<option value="file2">github.com/KimNorgaard/go-maml/errors.go (50.0%)</option>
+				
+				<option value="file3">github.com/KimNorgaard/go-maml/errors/errors.go (0.0%)</option>
+				
+				<option value="file4">github.com/KimNorgaard/go-maml/format.go (73.0%)</option>
+				
+				<option value="file5">github.com/KimNorgaard/go-maml/internal/ast/ast.go (37.8%)</option>
+				
+				<option value="file6">github.com/KimNorgaard/go-maml/internal/lexer/lexer.go (96.0%)</option>
+				
+				<option value="file7">github.com/KimNorgaard/go-maml/internal/parser/parser.go (97.0%)</option>
+				
+				<option value="file8">github.com/KimNorgaard/go-maml/internal/testutil/embed.go (0.0%)</option>
+				
+				<option value="file9">github.com/KimNorgaard/go-maml/internal/token/token.go (100.0%)</option>
+				
+				<option value="file10">github.com/KimNorgaard/go-maml/maml.go (100.0%)</option>
+				
+				<option value="file11">github.com/KimNorgaard/go-maml/options.go (100.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package maml
+
+import (
+        "bytes"
+        "encoding"
+        "fmt"
+        "io"
+        "reflect"
+        "strings"
+        "sync"
+
+        "github.com/KimNorgaard/go-maml/internal/ast"
+        "github.com/KimNorgaard/go-maml/internal/lexer"
+        "github.com/KimNorgaard/go-maml/internal/parser"
+)
+
+// Decoder reads and decodes MAML values from an input stream.
+type Decoder struct {
+        r    io.Reader
+        opts []Option
+}
+
+const defaultMaxDepth = 1000
+
+// NewDecoder returns a new decoder that reads from r.
+//
+// The decoder may buffer data from r as necessary. It is the caller's
+// responsibility to call Close on r if required.
+//
+// Functional options can be provided to configure the decoding process,
+// such as setting a maximum decoding depth with the MaxDepth option.
+func NewDecoder(r io.Reader, opts ...Option) *Decoder <span class="cov8" title="1">{
+        return &amp;Decoder{r: r, opts: opts}
+}</span>
+
+// Decode reads the next MAML-encoded value from its input and stores it in
+// the value pointed to by out. If out is nil or not a pointer, Decode returns
+// an error.
+//
+// See the documentation for Unmarshal for details about the conversion of MAML
+// into a Go value.
+//
+// If the input contains syntax errors, Decode will return a ParseErrors value.
+func (d *Decoder) Decode(out any) error <span class="cov8" title="1">{
+        if d.r == nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("maml: Decode(nil reader)")
+        }</span>
+
+        <span class="cov8" title="1">o := options{}
+        for _, opt := range d.opts </span><span class="cov8" title="1">{
+                if err := opt(&amp;o); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+
+        <span class="cov8" title="1">l := lexer.New(d.r)
+        parseOpts := []parser.Option{}
+        if o.parseComments </span><span class="cov8" title="1">{
+                parseOpts = append(parseOpts, parser.WithParseComments())
+        }</span>
+        <span class="cov8" title="1">p := parser.New(l, parseOpts...)
+
+        doc := p.Parse()
+
+        if len(p.Errors()) &gt; 0 </span><span class="cov8" title="1">{
+                return p.Errors()
+        }</span>
+
+        <span class="cov8" title="1">return d.decodeDocument(doc, out, &amp;o)</span>
+}
+
+// decodeDocument processes the options and maps the AST to a Go value.
+func (d *Decoder) decodeDocument(doc *ast.Document, v any, o *options) error <span class="cov8" title="1">{
+        // If the target is an *ast.Document, just assign it.
+        if docPtr, ok := v.(**ast.Document); ok </span><span class="cov8" title="1">{
+                *docPtr = doc
+                return nil
+        }</span>
+
+        <span class="cov8" title="1">if o.maxDepth == 0 </span><span class="cov8" title="1">{
+                o.maxDepth = defaultMaxDepth
+        }</span>
+
+        <span class="cov8" title="1">rv := reflect.ValueOf(v)
+        if rv.Kind() != reflect.Pointer || rv.IsNil() </span><span class="cov8" title="1">{
+                return fmt.Errorf("maml: Unmarshal(non-pointer %T or nil)", v)
+        }</span>
+        <span class="cov8" title="1">if len(doc.Statements) == 0 </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+        <span class="cov8" title="1">stmt, ok := doc.Statements[0].(*ast.ExpressionStatement)
+        if !ok </span><span class="cov0" title="0">{
+                return fmt.Errorf("maml: document root is not a valid expression statement")
+        }</span>
+        <span class="cov8" title="1">ds := &amp;decodeState{depth: o.maxDepth, opts: o}
+        return ds.mapValue(stmt.Expression, rv.Elem())</span>
+}
+
+type decodeState struct {
+        depth int
+        opts  *options
+}
+
+func (ds *decodeState) mapValue(expr ast.Expression, rv reflect.Value) error <span class="cov8" title="1">{ //nolint:gocyclo,funlen
+        ds.depth--
+        if ds.depth &lt;= 0 </span><span class="cov8" title="1">{
+                return fmt.Errorf("maml: reached max recursion depth")
+        }</span>
+        <span class="cov8" title="1">defer func() </span><span class="cov8" title="1">{ ds.depth++ }</span>()
+
+        <span class="cov8" title="1">if _, isNull := expr.(*ast.NullLiteral); isNull </span><span class="cov8" title="1">{
+                switch rv.Kind() </span>{
+                case reflect.Interface, reflect.Pointer, reflect.Map, reflect.Slice:<span class="cov8" title="1">
+                        rv.Set(reflect.Zero(rv.Type()))
+                        return nil</span>
+                }
+        }
+
+        // Attempt to use a custom unmarshaler if available.
+        <span class="cov8" title="1">handled, err := ds.tryCustomUnmarshal(expr, rv)
+        if err != nil </span><span class="cov8" title="1">{
+                return err
+        }</span>
+        <span class="cov8" title="1">if handled </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+
+        <span class="cov8" title="1">for rv.Kind() == reflect.Pointer </span><span class="cov8" title="1">{
+                if rv.IsNil() </span><span class="cov8" title="1">{
+                        rv.Set(reflect.New(rv.Type().Elem()))
+                }</span>
+                <span class="cov8" title="1">rv = rv.Elem()</span>
+        }
+
+        <span class="cov8" title="1">if rv.Kind() == reflect.Interface </span><span class="cov8" title="1">{
+                return ds.mapInterface(expr, rv)
+        }</span>
+        <span class="cov8" title="1">if !rv.CanSet() </span><span class="cov0" title="0">{
+                return fmt.Errorf("maml: cannot set value of type %s", rv.Type())
+        }</span>
+
+        <span class="cov8" title="1">switch node := expr.(type) </span>{
+        case *ast.NullLiteral:<span class="cov8" title="1">
+                rv.Set(reflect.Zero(rv.Type()))
+                return nil</span>
+        case *ast.Identifier:<span class="cov8" title="1">
+                return ds.mapIdentifier(node, rv)</span>
+        case *ast.StringLiteral:<span class="cov8" title="1">
+                return ds.mapString(node, rv)</span>
+        case *ast.IntegerLiteral:<span class="cov8" title="1">
+                return ds.mapInt(node, rv)</span>
+        case *ast.FloatLiteral:<span class="cov8" title="1">
+                return ds.mapFloat(node, rv)</span>
+        case *ast.BooleanLiteral:<span class="cov8" title="1">
+                return ds.mapBool(node, rv)</span>
+        case *ast.ArrayLiteral:<span class="cov8" title="1">
+                switch rv.Kind() </span>{
+                case reflect.Slice:<span class="cov8" title="1">
+                        return ds.mapSlice(node, rv)</span>
+                case reflect.Array:<span class="cov8" title="1">
+                        return ds.mapArray(node, rv)</span>
+                default:<span class="cov8" title="1">
+                        return fmt.Errorf("maml: cannot unmarshal array into Go value of type %s", rv.Type())</span>
+                }
+        case *ast.ObjectLiteral:<span class="cov8" title="1">
+                switch rv.Kind() </span>{
+                case reflect.Struct:<span class="cov8" title="1">
+                        return ds.mapStruct(node, rv)</span>
+                case reflect.Map:<span class="cov8" title="1">
+                        return ds.mapMap(node, rv)</span>
+                default:<span class="cov8" title="1">
+                        return fmt.Errorf("maml: cannot unmarshal object into Go value of type %s", rv.Type())</span>
+                }
+        default:<span class="cov0" title="0">
+                return fmt.Errorf("maml: mapping for AST node type %T not yet implemented", node)</span>
+        }
+}
+
+// tryCustomUnmarshal attempts to use a custom unmarshaler (maml.Unmarshaler or
+// encoding.TextUnmarshaler) on the given reflect.Value. It returns true if a
+// custom unmarshaler was found and used, in which case the caller should not
+// proceed with default unmarshaling.
+func (ds *decodeState) tryCustomUnmarshal(expr ast.Expression, rv reflect.Value) (bool, error) <span class="cov8" title="1">{
+        if !rv.CanAddr() </span><span class="cov0" title="0">{
+                return false, nil
+        }</span>
+        <span class="cov8" title="1">pv := rv.Addr()
+        if !pv.CanInterface() </span><span class="cov0" title="0">{
+                return false, nil
+        }</span>
+
+        // Check for maml.Unmarshaler
+        <span class="cov8" title="1">if u, ok := pv.Interface().(Unmarshaler); ok </span><span class="cov8" title="1">{
+                var buf bytes.Buffer
+                compactIndent := 0
+                f := newFormatter(&amp;buf, &amp;options{indent: &amp;compactIndent})
+                if err := f.format(expr); err != nil </span><span class="cov0" title="0">{
+                        return true, fmt.Errorf("maml: failed to re-marshal node for custom unmarshaler: %w", err)
+                }</span>
+                <span class="cov8" title="1">if err := u.UnmarshalMAML(buf.Bytes()); err != nil </span><span class="cov8" title="1">{
+                        return true, &amp;UnmarshalerError{Type: pv.Type(), Err: err}
+                }</span>
+                <span class="cov8" title="1">return true, nil</span>
+        }
+
+        // Check for encoding.TextUnmarshaler
+        <span class="cov8" title="1">if u, ok := pv.Interface().(encoding.TextUnmarshaler); ok </span><span class="cov8" title="1">{
+                s, isString := expr.(*ast.StringLiteral)
+                if !isString </span><span class="cov8" title="1">{
+                        // TextUnmarshaler can only be used on string values.
+                        return false, nil
+                }</span>
+                <span class="cov8" title="1">if err := u.UnmarshalText([]byte(s.Value)); err != nil </span><span class="cov0" title="0">{
+                        return true, &amp;UnmarshalerError{Type: pv.Type(), Err: err}
+                }</span>
+                <span class="cov8" title="1">return true, nil</span>
+        }
+
+        <span class="cov8" title="1">return false, nil</span>
+}
+
+func (ds *decodeState) mapString(s *ast.StringLiteral, rv reflect.Value) error <span class="cov8" title="1">{
+        if rv.Kind() != reflect.String </span><span class="cov8" title="1">{
+                return fmt.Errorf("maml: cannot unmarshal string into Go value of type %s", rv.Type())
+        }</span>
+        <span class="cov8" title="1">rv.SetString(s.Value)
+        return nil</span>
+}
+
+func (ds *decodeState) mapIdentifier(i *ast.Identifier, rv reflect.Value) error <span class="cov8" title="1">{
+        if rv.Kind() != reflect.String </span><span class="cov0" title="0">{
+                return fmt.Errorf("maml: cannot unmarshal identifier into Go value of type %s", rv.Type())
+        }</span>
+        <span class="cov8" title="1">rv.SetString(i.Value)
+        return nil</span>
+}
+
+func (ds *decodeState) mapInt(i *ast.IntegerLiteral, rv reflect.Value) error <span class="cov8" title="1">{
+        switch rv.Kind() </span>{
+        case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:<span class="cov8" title="1">
+                if rv.OverflowInt(i.Value) </span><span class="cov8" title="1">{
+                        return fmt.Errorf("maml: integer value %d overflows Go value of type %s", i.Value, rv.Type())
+                }</span>
+                <span class="cov8" title="1">rv.SetInt(i.Value)
+                return nil</span>
+        default:<span class="cov8" title="1">
+                return fmt.Errorf("maml: cannot unmarshal integer into Go value of type %s", rv.Type())</span>
+        }
+}
+
+func (ds *decodeState) mapFloat(f *ast.FloatLiteral, rv reflect.Value) error <span class="cov8" title="1">{
+        switch rv.Kind() </span>{
+        case reflect.Float32, reflect.Float64:<span class="cov8" title="1">
+                if rv.OverflowFloat(f.Value) </span><span class="cov8" title="1">{
+                        return fmt.Errorf("maml: float value %f overflows Go value of type %s", f.Value, rv.Type())
+                }</span>
+                <span class="cov8" title="1">rv.SetFloat(f.Value)
+                return nil</span>
+        default:<span class="cov8" title="1">
+                return fmt.Errorf("maml: cannot unmarshal float into Go value of type %s", rv.Type())</span>
+        }
+}
+
+func (ds *decodeState) mapBool(b *ast.BooleanLiteral, rv reflect.Value) error <span class="cov8" title="1">{
+        if rv.Kind() != reflect.Bool </span><span class="cov8" title="1">{
+                return fmt.Errorf("maml: cannot unmarshal boolean into Go value of type %s", rv.Type())
+        }</span>
+        <span class="cov8" title="1">rv.SetBool(b.Value)
+        return nil</span>
+}
+
+func (ds *decodeState) mapSlice(a *ast.ArrayLiteral, rv reflect.Value) error <span class="cov8" title="1">{
+        sliceType := rv.Type()
+        newSlice := reflect.MakeSlice(sliceType, len(a.Elements), len(a.Elements))
+        for i, elemAST := range a.Elements </span><span class="cov8" title="1">{
+                if err := ds.mapValue(elemAST, newSlice.Index(i)); err != nil </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+        }
+        <span class="cov8" title="1">rv.Set(newSlice)
+        return nil</span>
+}
+
+func (ds *decodeState) mapArray(a *ast.ArrayLiteral, rv reflect.Value) error <span class="cov8" title="1">{
+        if rv.Len() != len(a.Elements) </span><span class="cov8" title="1">{
+                return fmt.Errorf("maml: cannot unmarshal array of length %d into Go array of length %d", len(a.Elements), rv.Len())
+        }</span>
+        <span class="cov8" title="1">for i, elemAST := range a.Elements </span><span class="cov8" title="1">{
+                if err := ds.mapValue(elemAST, rv.Index(i)); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+        <span class="cov8" title="1">return nil</span>
+}
+
+// resolveMapKey extracts the string key from an AST node.
+func resolveMapKey(keyExpr ast.Expression) (string, error) <span class="cov8" title="1">{
+        switch k := keyExpr.(type) </span>{
+        case *ast.Identifier:<span class="cov8" title="1">
+                return k.Value, nil</span>
+        case *ast.StringLiteral:<span class="cov8" title="1">
+                return k.Value, nil</span>
+        default:<span class="cov0" title="0">
+                return "", fmt.Errorf("maml: invalid key type in object literal: %T", keyExpr)</span>
+        }
+}
+
+// findField finds the target field in a struct's cached fields.
+// It first attempts a case-sensitive match, then falls back to a
+// case-insensitive match.
+func findField(fields map[string]field, keyStr string) *field <span class="cov8" title="1">{
+        // Try a direct, case-sensitive match on the tag/field name.
+        if f, ok := fields[keyStr]; ok </span><span class="cov8" title="1">{
+                return &amp;f
+        }</span>
+
+        // Fallback to a case-insensitive match pre-calculated in the cache.
+        <span class="cov8" title="1">if f, ok := fields[strings.ToLower(keyStr)]; ok </span><span class="cov8" title="1">{
+                return &amp;f
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (ds *decodeState) mapMap(obj *ast.ObjectLiteral, rv reflect.Value) error <span class="cov8" title="1">{
+        mapType := rv.Type()
+        if mapType.Key().Kind() != reflect.String </span><span class="cov0" title="0">{
+                return fmt.Errorf("maml: cannot unmarshal object into map with non-string key type %s", mapType.Key())
+        }</span>
+        <span class="cov8" title="1">if rv.IsNil() </span><span class="cov8" title="1">{
+                rv.Set(reflect.MakeMap(mapType))
+        }</span> else<span class="cov8" title="1"> {
+                for _, k := range rv.MapKeys() </span><span class="cov8" title="1">{
+                        rv.SetMapIndex(k, reflect.Value{}) // The zero Value deletes the key
+                }</span>
+        }
+        <span class="cov8" title="1">elemType := mapType.Elem()
+        for _, pair := range obj.Pairs </span><span class="cov8" title="1">{
+                keyStr, err := resolveMapKey(pair.Key)
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">newVal := reflect.New(elemType).Elem()
+                if err := ds.mapValue(pair.Value, newVal); err != nil </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">rv.SetMapIndex(reflect.ValueOf(keyStr), newVal)</span>
+        }
+        <span class="cov8" title="1">return nil</span>
+}
+
+// resolveFieldPath traverses the given field index path `idx` starting from `rv`.
+// It initializes any nil embedded pointers encountered along the path.
+// Returns the reflect.Value of the final field at the end of the path.
+func (ds *decodeState) resolveFieldPath(rv reflect.Value, idx []int) (reflect.Value, error) <span class="cov8" title="1">{
+        currentVal := rv
+        for i, fieldIndex := range idx </span><span class="cov8" title="1">{
+                // Handle pointer indirection and nil pointer initialization
+                for currentVal.Kind() == reflect.Pointer </span><span class="cov8" title="1">{
+                        if currentVal.IsNil() </span><span class="cov8" title="1">{
+                                if !currentVal.CanSet() </span><span class="cov0" title="0">{
+                                        return reflect.Value{}, fmt.Errorf("maml: cannot set nil embedded pointer in path %v", idx[:i+1])
+                                }</span>
+                                <span class="cov8" title="1">currentVal.Set(reflect.New(currentVal.Type().Elem()))</span>
+                        }
+                        <span class="cov8" title="1">currentVal = currentVal.Elem()</span>
+                }
+
+                <span class="cov8" title="1">if currentVal.Kind() != reflect.Struct </span><span class="cov0" title="0">{
+                        // This should ideally not happen if cachedFields correctly processes struct fields
+                        // The idx path should only lead through structs or pointers to structs until the final field.
+                        return reflect.Value{}, fmt.Errorf("maml: expected struct at path segment %v, got %s", idx[:i], currentVal.Kind())
+                }</span>
+                <span class="cov8" title="1">currentVal = currentVal.Field(fieldIndex)</span>
+        }
+        <span class="cov8" title="1">return currentVal, nil</span>
+}
+
+func (ds *decodeState) mapStruct(obj *ast.ObjectLiteral, rv reflect.Value) error <span class="cov8" title="1">{
+        fields := cachedFields(rv.Type())
+        seenFields := make(map[string]struct{})
+
+        for _, pair := range obj.Pairs </span><span class="cov8" title="1">{
+                keyStr, err := resolveMapKey(pair.Key)
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov8" title="1">if targetField := findField(fields, keyStr); targetField != nil </span><span class="cov8" title="1">{
+                        finalFieldVal, err := ds.resolveFieldPath(rv, targetField.idx)
+                        if err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+
+                        <span class="cov8" title="1">if finalFieldVal.IsValid() &amp;&amp; finalFieldVal.CanSet() </span><span class="cov8" title="1">{
+                                if err := ds.mapValue(pair.Value, finalFieldVal); err != nil </span><span class="cov0" title="0">{
+                                        return err
+                                }</span>
+                                <span class="cov8" title="1">seenFields[keyStr] = struct{}{}</span>
+                        }
+                }
+        }
+
+        // Check for unknown fields if disallowUnknownFields is enabled
+        <span class="cov8" title="1">if ds.opts.disallowUnknownFields </span><span class="cov8" title="1">{
+                if err := ds.checkUnknownFields(obj, rv.Type(), seenFields); err != nil </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+        }
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// checkUnknownFields iterates through the object literal's pairs and
+// returns an error if any field was not found in the seenFields map,
+// indicating an unknown field.
+func (ds *decodeState) checkUnknownFields(obj *ast.ObjectLiteral, structType reflect.Type, seenFields map[string]struct{}) error <span class="cov8" title="1">{
+        for _, pair := range obj.Pairs </span><span class="cov8" title="1">{
+                keyStr, err := resolveMapKey(pair.Key)
+                if err != nil </span><span class="cov0" title="0">{
+                        // This should ideally not happen as resolveMapKey is called earlier
+                        return err
+                }</span>
+                <span class="cov8" title="1">if _, ok := seenFields[keyStr]; !ok </span><span class="cov8" title="1">{
+                        return fmt.Errorf("maml: unknown field %q in type %s", keyStr, structType)
+                }</span>
+        }
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (ds *decodeState) mapInterface(expr ast.Expression, rv reflect.Value) error <span class="cov8" title="1">{
+        if rv.NumMethod() != 0 </span><span class="cov0" title="0">{
+                return fmt.Errorf("maml: cannot unmarshal into non-empty interface %s", rv.Type())
+        }</span>
+        <span class="cov8" title="1">var concreteVal reflect.Value
+        switch expr.(type) </span>{
+        case *ast.Identifier:<span class="cov8" title="1">
+                var s string
+                concreteVal = reflect.ValueOf(&amp;s).Elem()</span>
+        case *ast.StringLiteral:<span class="cov8" title="1">
+                var s string
+                concreteVal = reflect.ValueOf(&amp;s).Elem()</span>
+        case *ast.IntegerLiteral:<span class="cov8" title="1">
+                var i int64
+                concreteVal = reflect.ValueOf(&amp;i).Elem()</span>
+        case *ast.FloatLiteral:<span class="cov8" title="1">
+                var f float64
+                concreteVal = reflect.ValueOf(&amp;f).Elem()</span>
+        case *ast.BooleanLiteral:<span class="cov8" title="1">
+                var b bool
+                concreteVal = reflect.ValueOf(&amp;b).Elem()</span>
+        case *ast.ArrayLiteral:<span class="cov8" title="1">
+                var a []any
+                concreteVal = reflect.ValueOf(&amp;a).Elem()</span>
+        case *ast.ObjectLiteral:<span class="cov8" title="1">
+                var o map[string]any
+                concreteVal = reflect.ValueOf(&amp;o).Elem()</span>
+        case *ast.NullLiteral:<span class="cov0" title="0">
+                return nil</span>
+        default:<span class="cov0" title="0">
+                return fmt.Errorf("maml: cannot determine concrete type for interface{} for AST node %T", expr)</span>
+        }
+        <span class="cov8" title="1">if err := ds.mapValue(expr, concreteVal); err != nil </span><span class="cov8" title="1">{
+                return err
+        }</span>
+        <span class="cov8" title="1">rv.Set(concreteVal)
+        return nil</span>
+}
+
+// A field represents a single field in a struct.
+type field struct {
+        idx []int
+}
+
+// fieldCache caches a map of struct field names to their properties.
+var fieldCache sync.Map // map[reflect.Type]map[string]field
+
+// cachedFields returns a map of field names to field properties for the given type.
+// The result is cached to avoid repeated reflection work.
+func cachedFields(t reflect.Type) map[string]field <span class="cov8" title="1">{ //nolint:gocognit
+        if f, ok := fieldCache.Load(t); ok </span><span class="cov8" title="1">{
+                if fields, ok := f.(map[string]field); ok </span><span class="cov8" title="1">{
+                        return fields
+                }</span>
+        }
+
+        // fieldEntry stores information about a field found during traversal,
+        // including its depth for precedence resolution.
+        <span class="cov8" title="1">type fieldEntry struct {
+                f             field
+                name          string // The actual name (tag or field name)
+                depth         int    // Depth of embedding (0 for top-level)
+                originalField reflect.StructField
+        }
+
+        var collectedEntries []fieldEntry
+
+        var walkAndCollect func(currentType reflect.Type, currentIdx []int, currentDepth int)
+        walkAndCollect = func(currentType reflect.Type, currentIdx []int, currentDepth int) </span><span class="cov8" title="1">{
+                for i := 0; i &lt; currentType.NumField(); i++ </span><span class="cov8" title="1">{
+                        sf := currentType.Field(i)
+                        // Create a new slice for fieldIdx to avoid appendAssign issues and ensure
+                        // `currentIdx` is not modified by recursive calls using the same underlying array.
+                        fieldIdx := make([]int, len(currentIdx)+1)
+                        copy(fieldIdx, currentIdx)
+                        fieldIdx[len(currentIdx)] = i
+
+                        // Dereference embedded pointer types for recursion,
+                        // but `fieldIdx` still points to the pointer if it was a pointer embed.
+                        fieldType := sf.Type
+                        if fieldType.Kind() == reflect.Pointer </span><span class="cov8" title="1">{
+                                fieldType = fieldType.Elem()
+                        }</span>
+
+                        <span class="cov8" title="1">if sf.Anonymous &amp;&amp; fieldType.Kind() == reflect.Struct </span><span class="cov8" title="1">{
+                                // Recurse into embedded structs, increment depth
+                                walkAndCollect(fieldType, fieldIdx, currentDepth+1)
+                                continue</span>
+                        }
+
+                        // Skip unexported fields
+                        <span class="cov8" title="1">if !sf.IsExported() </span><span class="cov8" title="1">{
+                                continue</span>
+                        }
+
+                        <span class="cov8" title="1">tag := sf.Tag.Get("maml")
+                        // Skip fields with `maml:"-"` tag
+                        if tag == "-" </span><span class="cov8" title="1">{
+                                continue</span>
+                        }
+
+                        <span class="cov8" title="1">actualField := field{idx: fieldIdx}
+                        tagName := strings.Split(tag, ",")[0]
+
+                        // Add entries for the tag name (if present) and the field name.
+                        if tagName != "" </span><span class="cov8" title="1">{
+                                collectedEntries = append(collectedEntries, fieldEntry{f: actualField, name: tagName, depth: currentDepth, originalField: sf})
+                        }</span>
+                        <span class="cov8" title="1">collectedEntries = append(collectedEntries, fieldEntry{f: actualField, name: sf.Name, depth: currentDepth, originalField: sf})</span>
+                }
+        }
+
+        <span class="cov8" title="1">walkAndCollect(t, nil, 0) // Start walking from the top-level type at depth 0
+
+        // Now, filter `collectedEntries` to apply precedence rules.
+        // Fields at a shallower depth take precedence. If depths are equal,
+        // the field declared earlier (in the Go struct definition) takes precedence.
+        // `collectedEntries` implicitly preserves declaration order for fields at the same depth,
+        // as `append` maintains order and `walkAndCollect` processes fields in declaration order.
+        precedenceMap := make(map[string]fieldEntry)
+
+        for _, entry := range collectedEntries </span><span class="cov8" title="1">{
+                if existing, ok := precedenceMap[entry.name]; !ok </span><span class="cov8" title="1">{
+                        // First time seeing this name, add it.
+                        precedenceMap[entry.name] = entry
+                }</span> else<span class="cov8" title="1"> if entry.depth &lt; existing.depth </span><span class="cov0" title="0">{
+                        // Found a field with shallower depth for the same name, replace.
+                        precedenceMap[entry.name] = entry
+                }</span>
+                // If entry.depth &gt;= existing.depth, the existing field takes precedence
+                // (either shallower, or same depth but declared earlier due to traversal order).
+        }
+
+        <span class="cov8" title="1">finalFields := make(map[string]field)
+
+        // Populate finalFields, handling case-insensitive fallback as per original logic.
+        // For case-insensitive, if a case-sensitive match already exists (from precedenceMap),
+        // we do not overwrite it with a new lowercase entry.
+        for name, entry := range precedenceMap </span><span class="cov8" title="1">{
+                // Add the case-sensitive name first (or the chosen name from precedenceMap).
+                finalFields[name] = entry.f
+
+                // Now, consider the lowercase version for case-insensitive fallback.
+                lowerName := strings.ToLower(name)
+                if _, ok := finalFields[lowerName]; !ok </span><span class="cov8" title="1">{
+                        // Only add the lowercase version if it doesn't already exist.
+                        // This means if "Name" was chosen (e.g. from a tag or field name),
+                        // and "name" (lowercase of "Name") is used for lookup, it should map to the same field.
+                        // This also respects if another field "name" (case-sensitive) was chosen.
+                        finalFields[lowerName] = entry.f
+                }</span>
+        }
+
+        <span class="cov8" title="1">fieldCache.Store(t, finalFields)
+        return finalFields</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package maml
+
+import (
+        "bytes"
+        "fmt"
+        "io"
+        "math"
+        "reflect"
+        "sort"
+        "strconv"
+        "strings"
+
+        "github.com/KimNorgaard/go-maml/internal/ast"
+        "github.com/KimNorgaard/go-maml/internal/lexer"
+        "github.com/KimNorgaard/go-maml/internal/parser"
+        "github.com/KimNorgaard/go-maml/internal/token"
+)
+
+// Encoder writes MAML values to an output stream.
+type Encoder struct {
+        w    io.Writer
+        opts []Option
+}
+
+// NewEncoder returns a new encoder that writes to w.
+//
+// Functional options can be provided to configure the encoding process,
+// such as setting the indentation with the Indent option.
+func NewEncoder(w io.Writer, opts ...Option) *Encoder <span class="cov8" title="1">{
+        return &amp;Encoder{w: w, opts: opts}
+}</span>
+
+// Encode writes the MAML encoding of in to the output stream.
+// It will return an error if any errors were encountered during encoding.
+//
+// See the documentation for Marshal for details about the conversion
+// of a Go value to MAML.
+//
+// Multiple calls to Encode can be used to stream multiple MAML documents,
+// but the output is not self-delimiting. It is the caller's responsibility
+// to separate the encoded values if required.
+func (e *Encoder) Encode(in any) error <span class="cov8" title="1">{
+        o := options{}
+        for _, opt := range e.opts </span><span class="cov8" title="1">{
+                if err := opt(&amp;o); err != nil </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+        }
+
+        // If the input is already an AST node, format it directly.
+        <span class="cov8" title="1">if node, ok := in.(ast.Node); ok </span><span class="cov8" title="1">{
+                f := newFormatter(e.w, &amp;o)
+                return f.format(node)
+        }</span>
+
+        <span class="cov8" title="1">es := &amp;encodeState{seen: make(map[uintptr]struct{})}
+        node, err := es.marshalValue(reflect.ValueOf(in))
+        if err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("maml: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">f := newFormatter(e.w, &amp;o)
+        return f.format(node)</span>
+}
+
+type encodeState struct {
+        // Keep track of pointers seen so far.
+        seen map[uintptr]struct{}
+}
+
+func (e *encodeState) marshalCustom(v reflect.Value, u Marshaler) (ast.Node, error) <span class="cov8" title="1">{
+        b, err := u.MarshalMAML()
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, &amp;MarshalerError{Type: v.Type(), Err: err}
+        }</span>
+
+        // The user's marshaled output must be parsed back into an AST node
+        // to be integrated into the main AST being built.
+        <span class="cov8" title="1">l := lexer.New(bytes.NewReader(b))
+        p := parser.New(l)
+        doc := p.Parse()
+
+        if len(p.Errors()) &gt; 0 </span><span class="cov8" title="1">{
+                var errs []string
+                for _, err := range p.Errors() </span><span class="cov8" title="1">{
+                        errs = append(errs, err.Message)
+                }</span>
+                <span class="cov8" title="1">return nil, &amp;MarshalerError{
+                        Type: v.Type(),
+                        Err:  fmt.Errorf("invalid MAML output: %s", strings.Join(errs, "; ")),
+                }</span>
+        }
+
+        <span class="cov8" title="1">if len(doc.Statements) == 0 </span><span class="cov8" title="1">{
+                // An empty document from a custom marshaler is treated as a null value.
+                return &amp;ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
+        }</span>
+
+        <span class="cov8" title="1">if len(doc.Statements) != 1 </span><span class="cov0" title="0">{
+                return nil, &amp;MarshalerError{
+                        Type: v.Type(),
+                        Err:  fmt.Errorf("expected single MAML expression, got %d statements", len(doc.Statements)),
+                }
+        }</span>
+
+        <span class="cov8" title="1">stmt, ok := doc.Statements[0].(*ast.ExpressionStatement)
+        if !ok </span><span class="cov0" title="0">{
+                return nil, &amp;MarshalerError{
+                        Type: v.Type(),
+                        Err:  fmt.Errorf("expected MAML expression, but got a different statement type"),
+                }
+        }</span>
+
+        <span class="cov8" title="1">return stmt.Expression, nil</span>
+}
+
+// parseTag splits a maml struct tag into its name and options.
+func parseTag(tag string) (string, map[string]bool) <span class="cov8" title="1">{
+        parts := strings.Split(tag, ",")
+        name := parts[0]
+        options := make(map[string]bool)
+        for _, part := range parts[1:] </span><span class="cov8" title="1">{
+                options[strings.TrimSpace(part)] = true
+        }</span>
+        <span class="cov8" title="1">return name, options</span>
+}
+
+// isEmptyValue reports whether the value v is empty.
+func isEmptyValue(v reflect.Value) bool <span class="cov8" title="1">{
+        switch v.Kind() </span>{
+        case reflect.Array, reflect.Map, reflect.Slice, reflect.String:<span class="cov8" title="1">
+                return v.Len() == 0</span>
+        case reflect.Bool:<span class="cov8" title="1">
+                return !v.Bool()</span>
+        case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:<span class="cov8" title="1">
+                return v.Int() == 0</span>
+        case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:<span class="cov0" title="0">
+                return v.Uint() == 0</span>
+        case reflect.Float32, reflect.Float64:<span class="cov8" title="1">
+                return v.Float() == 0</span>
+        case reflect.Interface, reflect.Pointer:<span class="cov8" title="1">
+                return v.IsNil()</span>
+        }
+        <span class="cov0" title="0">return false</span>
+}
+
+// isBareKey checks if a string can be used as a bare key in an object.
+// Bare keys can be identifiers or numbers, but not keywords.
+func isBareKey(s string) bool <span class="cov8" title="1">{
+        if s == "" </span><span class="cov0" title="0">{
+                return false
+        }</span>
+
+        // Keywords must be quoted.
+        <span class="cov8" title="1">if token.LookupIdent(s) != token.IDENT </span><span class="cov0" title="0">{
+                return false
+        }</span>
+
+        // If it can be parsed as a number, it can be a bare key.
+        <span class="cov8" title="1">if _, ok := lexer.ParseAsNumber(s); ok </span><span class="cov8" title="1">{
+                return true
+        }</span>
+
+        // Otherwise, it must be a valid identifier.
+        // Must not start with a hyphen (unless it's a number, handled above).
+        <span class="cov8" title="1">if s[0] == '-' </span><span class="cov0" title="0">{
+                return false
+        }</span>
+
+        <span class="cov8" title="1">for _, r := range s </span><span class="cov8" title="1">{
+                if !isIdentifierChar(r) </span><span class="cov8" title="1">{
+                        return false
+                }</span>
+        }
+
+        <span class="cov8" title="1">return true</span>
+}
+
+// isIdentifierChar checks if a rune is a valid character for a MAML identifier.
+func isIdentifierChar(r rune) bool <span class="cov8" title="1">{
+        return ('a' &lt;= r &amp;&amp; r &lt;= 'z') || ('A' &lt;= r &amp;&amp; r &lt;= 'Z') ||
+                ('0' &lt;= r &amp;&amp; r &lt;= '9') || r == '_' || r == '-'
+}</span>
+
+func (e *encodeState) marshalValue(v reflect.Value) (ast.Node, error) <span class="cov8" title="1">{ //nolint:gocyclo
+        if !v.IsValid() </span><span class="cov8" title="1">{
+                return &amp;ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
+        }</span>
+
+        // Check for custom Marshaler implementation first.
+        <span class="cov8" title="1">if v.Type().NumMethod() &gt; 0 &amp;&amp; v.CanInterface() </span><span class="cov8" title="1">{
+                if u, ok := v.Interface().(Marshaler); ok </span><span class="cov8" title="1">{
+                        return e.marshalCustom(v, u)
+                }</span>
+        }
+        <span class="cov8" title="1">if v.Kind() != reflect.Pointer </span><span class="cov8" title="1">{
+                var pv reflect.Value
+                if v.CanAddr() </span><span class="cov8" title="1">{
+                        pv = v.Addr()
+                }</span> else<span class="cov8" title="1"> {
+                        pv = reflect.New(v.Type())
+                        pv.Elem().Set(v)
+                }</span>
+                <span class="cov8" title="1">if pv.Type().NumMethod() &gt; 0 &amp;&amp; pv.CanInterface() </span><span class="cov8" title="1">{
+                        if u, ok := pv.Interface().(Marshaler); ok </span><span class="cov8" title="1">{
+                                return e.marshalCustom(pv, u)
+                        }</span>
+                }
+        }
+
+        <span class="cov8" title="1">switch v.Kind() </span>{
+        case reflect.Pointer:<span class="cov8" title="1">
+                return e.marshalPointer(v)</span>
+        case reflect.Interface:<span class="cov8" title="1">
+                return e.marshalInterface(v)</span>
+        case reflect.String:<span class="cov8" title="1">
+                return e.marshalString(v)</span>
+        case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:<span class="cov8" title="1">
+                return e.marshalInt(v)</span>
+        case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:<span class="cov0" title="0">
+                return e.marshalUint(v)</span>
+        case reflect.Float32, reflect.Float64:<span class="cov8" title="1">
+                return e.marshalFloat(v)</span>
+        case reflect.Bool:<span class="cov8" title="1">
+                return e.marshalBool(v)</span>
+        case reflect.Slice, reflect.Array:<span class="cov8" title="1">
+                return e.marshalSlice(v)</span>
+        case reflect.Map:<span class="cov8" title="1">
+                return e.marshalMap(v)</span>
+        case reflect.Struct:<span class="cov8" title="1">
+                return e.marshalStruct(v)</span>
+        default:<span class="cov0" title="0">
+                // nil can be a valid value for some kinds (e.g. chan, func, map, ptr, slice)
+                if !v.IsValid() || v.IsZero() </span><span class="cov0" title="0">{
+                        return &amp;ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
+                }</span>
+                <span class="cov0" title="0">return nil, fmt.Errorf("maml: unsupported type for marshaling: %s", v.Type())</span>
+        }
+}
+
+func (e *encodeState) marshalPointer(v reflect.Value) (ast.Node, error) <span class="cov8" title="1">{
+        if v.IsNil() </span><span class="cov8" title="1">{
+                return &amp;ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
+        }</span>
+        <span class="cov8" title="1">ptr := v.Pointer()
+        if _, ok := e.seen[ptr]; ok </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("maml: encountered a cycle via type %s", v.Type())
+        }</span>
+        <span class="cov8" title="1">e.seen[ptr] = struct{}{}
+        result, err := e.marshalValue(v.Elem())
+        delete(e.seen, ptr)
+        return result, err</span>
+}
+
+func (e *encodeState) marshalInterface(v reflect.Value) (ast.Node, error) <span class="cov8" title="1">{
+        if v.IsNil() </span><span class="cov8" title="1">{
+                return &amp;ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
+        }</span>
+        <span class="cov8" title="1">return e.marshalValue(v.Elem())</span>
+}
+
+func (e *encodeState) marshalString(v reflect.Value) (ast.Node, error) <span class="cov8" title="1">{
+        lit := v.String()
+        return &amp;ast.StringLiteral{Token: token.Token{Type: token.STRING, Literal: lit}, Value: lit}, nil
+}</span>
+
+func (e *encodeState) marshalInt(v reflect.Value) (ast.Node, error) <span class="cov8" title="1">{
+        val := v.Int()
+        lit := fmt.Sprintf("%d", val)
+        return &amp;ast.IntegerLiteral{Token: token.Token{Type: token.INT, Literal: lit}, Value: val}, nil
+}</span>
+
+func (e *encodeState) marshalUint(v reflect.Value) (ast.Node, error) <span class="cov0" title="0">{
+        val := v.Uint()
+        if val &gt; math.MaxInt64 </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("maml: cannot marshal uint64 %d into MAML (overflows int64)", val)
+        }</span>
+        <span class="cov0" title="0">lit := fmt.Sprintf("%d", val)
+        return &amp;ast.IntegerLiteral{Token: token.Token{Type: token.INT, Literal: lit}, Value: int64(val)}, nil</span>
+}
+
+func (e *encodeState) marshalFloat(v reflect.Value) (ast.Node, error) <span class="cov8" title="1">{
+        val := v.Float()
+        lit := strconv.FormatFloat(val, 'g', -1, 64)
+        // If the formatted string doesn't contain a decimal or an exponent, add .0
+        // to ensure it's treated as a float.
+        if !strings.ContainsAny(lit, ".eE") </span><span class="cov8" title="1">{
+                lit += ".0"
+        }</span>
+        <span class="cov8" title="1">return &amp;ast.FloatLiteral{Token: token.Token{Type: token.FLOAT, Literal: lit}, Value: val}, nil</span>
+}
+
+func (e *encodeState) marshalBool(v reflect.Value) (ast.Node, error) <span class="cov8" title="1">{
+        val := v.Bool()
+        lit := fmt.Sprintf("%t", val)
+        tokType := token.FALSE
+        if val </span><span class="cov8" title="1">{
+                tokType = token.TRUE
+        }</span>
+        <span class="cov8" title="1">return &amp;ast.BooleanLiteral{Token: token.Token{Type: tokType, Literal: lit}, Value: val}, nil</span>
+}
+
+func (e *encodeState) marshalSlice(v reflect.Value) (ast.Node, error) <span class="cov8" title="1">{
+        if v.Kind() == reflect.Slice </span><span class="cov8" title="1">{
+                if v.IsNil() </span><span class="cov8" title="1">{
+                        return &amp;ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
+                }</span>
+                <span class="cov8" title="1">ptr := v.Pointer()
+                if _, ok := e.seen[ptr]; ok </span><span class="cov8" title="1">{
+                        return nil, fmt.Errorf("maml: encountered a cycle via type %s", v.Type())
+                }</span>
+                <span class="cov8" title="1">e.seen[ptr] = struct{}{}
+                defer delete(e.seen, ptr)</span>
+        }
+
+        <span class="cov8" title="1">elements := make([]ast.Expression, v.Len())
+        for i := 0; i &lt; v.Len(); i++ </span><span class="cov8" title="1">{
+                elemNode, err := e.marshalValue(v.Index(i))
+                if err != nil </span><span class="cov8" title="1">{
+                        return nil, err
+                }</span>
+                <span class="cov8" title="1">elemExpr, ok := elemNode.(ast.Expression)
+                if !ok </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("maml: marshaled element is not an expression")
+                }</span>
+                <span class="cov8" title="1">elements[i] = elemExpr</span>
+        }
+        <span class="cov8" title="1">return &amp;ast.ArrayLiteral{
+                Token:    token.Token{Type: token.LBRACK, Literal: "["},
+                Elements: elements,
+        }, nil</span>
+}
+
+func (e *encodeState) marshalMap(v reflect.Value) (ast.Node, error) <span class="cov8" title="1">{
+        if v.IsNil() </span><span class="cov8" title="1">{
+                return &amp;ast.NullLiteral{Token: token.Token{Type: token.NULL, Literal: "null"}}, nil
+        }</span>
+        <span class="cov8" title="1">ptr := v.Pointer()
+        if _, ok := e.seen[ptr]; ok </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("maml: encountered a cycle via type %s", v.Type())
+        }</span>
+        <span class="cov8" title="1">e.seen[ptr] = struct{}{}
+        defer delete(e.seen, ptr)
+
+        if v.Type().Key().Kind() != reflect.String </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("maml: map key type must be a string, got %s", v.Type().Key())
+        }</span>
+
+        <span class="cov8" title="1">pairs := make([]*ast.KeyValueExpression, 0, v.Len())
+        keys := v.MapKeys()
+        sort.Slice(keys, func(i, j int) bool </span><span class="cov8" title="1">{
+                return keys[i].String() &lt; keys[j].String()
+        }</span>)
+        <span class="cov8" title="1">for _, key := range keys </span><span class="cov8" title="1">{
+                value := v.MapIndex(key)
+
+                valueNode, err := e.marshalValue(value)
+                if err != nil </span><span class="cov8" title="1">{
+                        return nil, err
+                }</span>
+                <span class="cov8" title="1">valueExpr, ok := valueNode.(ast.Expression)
+                if !ok </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("maml: marshaled map value is not an expression")
+                }</span>
+
+                <span class="cov8" title="1">keyStr := key.String()
+
+                var keyNode ast.Expression
+                if isBareKey(keyStr) </span><span class="cov8" title="1">{
+                        tok := token.Token{Literal: keyStr}
+                        if typ, ok := lexer.ParseAsNumber(keyStr); ok </span><span class="cov8" title="1">{
+                                tok.Type = typ
+                        }</span> else<span class="cov8" title="1"> {
+                                tok.Type = token.IDENT
+                        }</span>
+                        <span class="cov8" title="1">keyNode = &amp;ast.Identifier{Token: tok, Value: keyStr}</span>
+                } else<span class="cov8" title="1"> {
+                        keyNode = &amp;ast.StringLiteral{
+                                Token: token.Token{Type: token.STRING, Literal: keyStr},
+                                Value: keyStr,
+                        }
+                }</span>
+
+                <span class="cov8" title="1">pairs = append(pairs, &amp;ast.KeyValueExpression{
+                        Token: token.Token{Type: token.COLON, Literal: ":"},
+                        Key:   keyNode,
+                        Value: valueExpr,
+                })</span>
+        }
+
+        <span class="cov8" title="1">return &amp;ast.ObjectLiteral{
+                Token: token.Token{Type: token.LBRACE, Literal: "{"},
+                Pairs: pairs,
+        }, nil</span>
+}
+
+func (e *encodeState) marshalStruct(v reflect.Value) (ast.Node, error) <span class="cov8" title="1">{ //nolint:gocognit
+        pairs := make([]*ast.KeyValueExpression, 0, v.NumField())
+        t := v.Type()
+
+        for i := 0; i &lt; v.NumField(); i++ </span><span class="cov8" title="1">{
+                field := t.Field(i)
+                fieldValue := v.Field(i)
+
+                if !field.IsExported() </span><span class="cov8" title="1">{
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">tagStr := field.Tag.Get("maml")
+                tagName, opts := parseTag(tagStr)
+
+                if tagName == "-" </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">if opts["omitempty"] &amp;&amp; isEmptyValue(fieldValue) </span><span class="cov8" title="1">{
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">keyStr := field.Name
+                if tagName != "" </span><span class="cov8" title="1">{
+                        keyStr = tagName
+                }</span>
+
+                <span class="cov8" title="1">valueNode, err := e.marshalValue(fieldValue)
+                if err != nil </span><span class="cov8" title="1">{
+                        return nil, err
+                }</span>
+                <span class="cov8" title="1">valueExpr, ok := valueNode.(ast.Expression)
+                if !ok </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("maml: marshaled struct field value is not an expression")
+                }</span>
+
+                <span class="cov8" title="1">var keyNode ast.Expression
+                if isBareKey(keyStr) </span><span class="cov8" title="1">{
+                        tok := token.Token{Literal: keyStr}
+                        if typ, ok := lexer.ParseAsNumber(keyStr); ok </span><span class="cov0" title="0">{
+                                tok.Type = typ
+                        }</span> else<span class="cov8" title="1"> {
+                                tok.Type = token.IDENT
+                        }</span>
+                        <span class="cov8" title="1">keyNode = &amp;ast.Identifier{Token: tok, Value: keyStr}</span>
+                } else<span class="cov0" title="0"> {
+                        keyNode = &amp;ast.StringLiteral{
+                                Token: token.Token{Type: token.STRING, Literal: keyStr},
+                                Value: keyStr,
+                        }
+                }</span>
+
+                <span class="cov8" title="1">pairs = append(pairs, &amp;ast.KeyValueExpression{
+                        Token: token.Token{Type: token.COLON, Literal: ":"},
+                        Key:   keyNode,
+                        Value: valueExpr,
+                })</span>
+        }
+
+        <span class="cov8" title="1">return &amp;ast.ObjectLiteral{
+                Token: token.Token{Type: token.LBRACE, Literal: "{"},
+                Pairs: pairs,
+        }, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package maml
+
+import (
+        "reflect"
+)
+
+// A MarshalerError represents an error from calling a MarshalMAML method.
+type MarshalerError struct {
+        Type reflect.Type
+        Err  error
+}
+
+func (e *MarshalerError) Error() string <span class="cov8" title="1">{
+        return "maml: error calling MarshalMAML for type " + e.Type.String() + ": " + e.Err.Error()
+}</span>
+
+func (e *MarshalerError) Unwrap() error <span class="cov0" title="0">{ return e.Err }</span>
+
+// UnmarshalerError represents an error that occurred while calling
+// the UnmarshalMAML method.
+type UnmarshalerError struct {
+        Type reflect.Type
+        Err  error
+}
+
+func (e *UnmarshalerError) Error() string <span class="cov8" title="1">{
+        return "maml: error calling UnmarshalMAML for type " + e.Type.String() + ": " + e.Err.Error()
+}</span>
+
+func (e *UnmarshalerError) Unwrap() error <span class="cov0" title="0">{
+        return e.Err
+}</span>
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package errors
+
+import "fmt"
+
+// ParseError represents a single error that occurred during parsing.
+// It includes the position of the error.
+type ParseError struct {
+        Message string
+        Line    int
+        Column  int
+}
+
+// ParseErrors is a slice of ParseError that implements the error interface.
+// This allows returning all syntax errors found during parsing at once.
+type ParseErrors []ParseError
+
+func (p ParseErrors) Error() string <span class="cov0" title="0">{
+        if len(p) == 0 </span><span class="cov0" title="0">{
+                return ""
+        }</span>
+        // For simplicity, the default error message for the collection
+        // just reports the first error.
+        <span class="cov0" title="0">return fmt.Sprintf("maml: parsing error at line %d, column %d: %s", p[0].Line, p[0].Column, p[0].Message)</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package maml
+
+import (
+        "fmt"
+        "io"
+        "strings"
+
+        "github.com/KimNorgaard/go-maml/internal/ast"
+)
+
+// formatter writes a MAML AST to an output stream.
+type formatter struct {
+        w      io.Writer
+        indent string
+        depth  int
+        opts   *options
+}
+
+const (
+        defaultIndent = 2
+        tripleQuote   = `"""`
+)
+
+// newFormatter returns a new formatter that writes to w.
+func newFormatter(w io.Writer, opts *options) *formatter <span class="cov8" title="1">{
+        spaces := defaultIndent
+        if opts.indent != nil </span><span class="cov8" title="1">{
+                spaces = *opts.indent
+        }</span>
+        <span class="cov8" title="1">var indentStr string
+        if spaces &gt; 0 </span><span class="cov8" title="1">{
+                indentStr = strings.Repeat(" ", spaces)
+        }</span>
+        <span class="cov8" title="1">return &amp;formatter{w: w, indent: indentStr, opts: opts}</span>
+}
+
+// format writes the MAML string representation of the AST node to the writer.
+func (f *formatter) format(node ast.Node) error <span class="cov8" title="1">{
+        return f.writeNode(node)
+}</span>
+
+func (f *formatter) write(s string) error <span class="cov8" title="1">{
+        _, err := f.w.Write([]byte(s))
+        return err
+}</span>
+
+func (f *formatter) writeIndent() error <span class="cov8" title="1">{
+        if f.indent == "" </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+        <span class="cov8" title="1">for i := 0; i &lt; f.depth; i++ </span><span class="cov8" title="1">{
+                if err := f.write(f.indent); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (f *formatter) writeNode(node ast.Node) error <span class="cov8" title="1">{
+        switch n := node.(type) </span>{
+        case *ast.Document:<span class="cov8" title="1">
+                for _, comment := range n.HeadComments </span><span class="cov8" title="1">{
+                        if err := f.write("# " + comment.Value + "\n"); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+
+                <span class="cov8" title="1">for i, stmt := range n.Statements </span><span class="cov8" title="1">{
+                        if err := f.writeNode(stmt); err != nil </span><span class="cov8" title="1">{
+                                return err
+                        }</span>
+                        <span class="cov8" title="1">if i &lt; len(n.Statements)-1 </span><span class="cov0" title="0">{
+                                if err := f.write("\n"); err != nil </span><span class="cov0" title="0">{
+                                        return err
+                                }</span>
+                        }
+                }
+                <span class="cov8" title="1">return nil</span>
+
+        case *ast.ExpressionStatement:<span class="cov8" title="1">
+                return f.writeNode(n.Expression)</span>
+
+        case *ast.ObjectLiteral:<span class="cov8" title="1">
+                return f.writeObject(n)</span>
+
+        case *ast.ArrayLiteral:<span class="cov8" title="1">
+                return f.writeArray(n)</span>
+
+        case *ast.StringLiteral:<span class="cov8" title="1">
+                if f.opts.inlineStrings || f.indent == "" || !strings.ContainsRune(n.Value, '\n') || strings.Contains(n.Value, `"""`) </span><span class="cov8" title="1">{
+                        return f.write(n.String())
+                }</span>
+                <span class="cov8" title="1">return f.writeMultilineString(n.Value)</span>
+
+        case *ast.IntegerLiteral, *ast.FloatLiteral, *ast.BooleanLiteral:<span class="cov8" title="1">
+                return f.write(n.TokenLiteral())</span>
+
+        case *ast.NullLiteral:<span class="cov8" title="1">
+                return f.write("null")</span>
+
+        default:<span class="cov0" title="0">
+                return fmt.Errorf("maml: unsupported node type for formatting: %T", n)</span>
+        }
+}
+
+// writeMultilineString formats and writes a string value, deciding between standard
+// and multiline string literals based on options and content.
+func (f *formatter) writeMultilineString(s string) error <span class="cov8" title="1">{
+        return f.write(tripleQuote + "\n" + s + tripleQuote)
+}</span>
+
+func (f *formatter) writePrettyObject(obj *ast.ObjectLiteral) error <span class="cov8" title="1">{ //nolint:gocognit
+        f.depth++
+        for i, pair := range obj.Pairs </span><span class="cov8" title="1">{
+                // Use the recorded number of newlines from the source to preserve vertical spacing.
+                numNewlines := pair.NewlinesBefore
+                if i == 0 </span><span class="cov8" title="1">{
+                        // First pair is always one newline after '{'.
+                        numNewlines = 1
+                }</span> else<span class="cov8" title="1"> if numNewlines == 0 </span><span class="cov8" title="1">{
+                        // Subsequent pairs need at least one newline for pretty printing.
+                        numNewlines = 1
+                }</span>
+
+                <span class="cov8" title="1">for j := 0; j &lt; numNewlines; j++ </span><span class="cov8" title="1">{
+                        if err := f.write("\n"); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+
+                <span class="cov8" title="1">for _, comment := range pair.HeadComments </span><span class="cov8" title="1">{
+                        if err := f.writeIndent(); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                        <span class="cov8" title="1">if err := f.write("# " + comment.Value + "\n"); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+
+                <span class="cov8" title="1">if err := f.writeIndent(); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">if err := f.write(pair.Key.String() + ": "); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">if err := f.writeNode(pair.Value); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                <span class="cov8" title="1">if f.opts.useFieldCommas </span><span class="cov8" title="1">{
+                        if i &lt; len(obj.Pairs)-1 </span><span class="cov8" title="1">{
+                                if err := f.write(","); err != nil </span><span class="cov0" title="0">{
+                                        return err
+                                }</span>
+                        } else<span class="cov8" title="1"> if f.opts.useTrailingCommas </span><span class="cov8" title="1">{
+                                if err := f.write(","); err != nil </span><span class="cov0" title="0">{
+                                        return err
+                                }</span>
+                        }
+                }
+
+                <span class="cov8" title="1">if pair.LineComment != nil </span><span class="cov8" title="1">{
+                        if err := f.write(" # " + pair.LineComment.Value); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+
+                <span class="cov8" title="1">for _, comment := range pair.FootComments </span><span class="cov8" title="1">{
+                        if err := f.write("\n"); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                        <span class="cov8" title="1">if err := f.writeIndent(); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                        <span class="cov8" title="1">if err := f.write("# " + comment.Value); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+        }
+        <span class="cov8" title="1">f.depth--
+        if len(obj.Pairs) &gt; 0 </span><span class="cov8" title="1">{
+                if err := f.write("\n"); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+        <span class="cov8" title="1">return f.writeIndent()</span>
+}
+
+func (f *formatter) writeCompactObject(obj *ast.ObjectLiteral) error <span class="cov8" title="1">{
+        for i, pair := range obj.Pairs </span><span class="cov8" title="1">{
+                if i &gt; 0 </span><span class="cov8" title="1">{
+                        if err := f.write(","); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+                <span class="cov8" title="1">if err := f.write(pair.Key.String()); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">if err := f.write(":"); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">if err := f.writeNode(pair.Value); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (f *formatter) writeObject(obj *ast.ObjectLiteral) error <span class="cov8" title="1">{
+        if err := f.write("{"); err != nil </span><span class="cov8" title="1">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">if len(obj.Pairs) &gt; 0 </span><span class="cov8" title="1">{
+                if f.indent != "" </span><span class="cov8" title="1">{
+                        if err := f.writePrettyObject(obj); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                } else<span class="cov8" title="1"> {
+                        if err := f.writeCompactObject(obj); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+        }
+
+        <span class="cov8" title="1">return f.write("}")</span>
+}
+
+func (f *formatter) writePrettyArray(arr *ast.ArrayLiteral) error <span class="cov8" title="1">{ //nolint:gocognit
+        f.depth++
+        for i, elem := range arr.Elements </span><span class="cov8" title="1">{
+                if err := f.write("\n"); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">if err := f.writeIndent(); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">if err := f.writeNode(elem); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">if f.opts.useFieldCommas </span><span class="cov8" title="1">{
+                        if i &lt; len(arr.Elements)-1 </span><span class="cov8" title="1">{
+                                if err := f.write(","); err != nil </span><span class="cov0" title="0">{
+                                        return err
+                                }</span>
+                        } else<span class="cov8" title="1"> if f.opts.useTrailingCommas </span><span class="cov8" title="1">{
+                                if err := f.write(","); err != nil </span><span class="cov0" title="0">{
+                                        return err
+                                }</span>
+                        }
+                }
+        }
+        <span class="cov8" title="1">f.depth--
+        if err := f.write("\n"); err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">return f.writeIndent()</span>
+}
+
+func (f *formatter) writeCompactArray(arr *ast.ArrayLiteral) error <span class="cov8" title="1">{
+        for i, elem := range arr.Elements </span><span class="cov8" title="1">{
+                if i &gt; 0 </span><span class="cov8" title="1">{
+                        if err := f.write(","); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+                <span class="cov8" title="1">if err := f.writeNode(elem); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+        <span class="cov8" title="1">return nil</span>
+}
+
+func (f *formatter) writeArray(arr *ast.ArrayLiteral) error <span class="cov8" title="1">{
+        if err := f.write("["); err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">if len(arr.Elements) &gt; 0 </span><span class="cov8" title="1">{
+                switch </span>{
+                case f.opts.inlineArrays:<span class="cov8" title="1">
+                        if err := f.writeCompactArray(arr); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                case f.indent != "":<span class="cov8" title="1">
+                        if err := f.writePrettyArray(arr); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                default:<span class="cov8" title="1">
+                        if err := f.writeCompactArray(arr); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+        }
+
+        <span class="cov8" title="1">return f.write("]")</span>
+}
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package ast
+
+import (
+        "bytes"
+        "strconv"
+        "strings"
+
+        "github.com/KimNorgaard/go-maml/internal/token"
+)
+
+// Node is the base interface for all AST nodes.
+type Node interface {
+        // TokenLiteral returns the literal value of the token associated with the node.
+        TokenLiteral() string
+        // String returns a string representation of the node.
+        String() string
+}
+
+// Statement is a node that represents a statement.
+type Statement interface {
+        Node
+        statementNode()
+}
+
+// Expression is a node that represents an expression.
+type Expression interface {
+        Node
+        expressionNode()
+}
+
+// Document is the root node of a MAML document.
+type Document struct {
+        HeadComments []*Comment
+        Statements   []Statement
+}
+
+// TokenLiteral returns the literal value of the token associated with the node.
+func (p *Document) TokenLiteral() string <span class="cov0" title="0">{
+        if len(p.Statements) &gt; 0 </span><span class="cov0" title="0">{
+                return p.Statements[0].TokenLiteral()
+        }</span>
+        <span class="cov0" title="0">return ""</span>
+}
+
+// String returns a string representation of the node.
+func (p *Document) String() string <span class="cov8" title="1">{
+        var out bytes.Buffer
+        for _, s := range p.Statements </span><span class="cov8" title="1">{
+                out.WriteString(s.String())
+        }</span>
+        <span class="cov8" title="1">return out.String()</span>
+}
+
+// ExpressionStatement represents a statement that consists of a single expression.
+type ExpressionStatement struct {
+        Token      token.Token // the first token of the expression
+        Expression Expression
+}
+
+func (es *ExpressionStatement) statementNode()       {<span class="cov0" title="0">}</span>
+func (es *ExpressionStatement) TokenLiteral() string <span class="cov0" title="0">{ return es.Token.Literal }</span>
+func (es *ExpressionStatement) String() string <span class="cov8" title="1">{
+        if es.Expression != nil </span><span class="cov8" title="1">{
+                return es.Expression.String()
+        }</span>
+        <span class="cov0" title="0">return ""</span>
+}
+
+// Identifier represents an identifier.
+type Identifier struct {
+        Token token.Token // the token.IDENT token
+        Value string
+}
+
+func (i *Identifier) expressionNode()      {<span class="cov0" title="0">}</span>
+func (i *Identifier) TokenLiteral() string <span class="cov0" title="0">{ return i.Token.Literal }</span>
+func (i *Identifier) String() string       <span class="cov8" title="1">{ return i.Value }</span>
+
+// BooleanLiteral represents a boolean literal.
+type BooleanLiteral struct {
+        Token token.Token
+        Value bool
+}
+
+func (b *BooleanLiteral) expressionNode()      {<span class="cov0" title="0">}</span>
+func (b *BooleanLiteral) TokenLiteral() string <span class="cov0" title="0">{ return b.Token.Literal }</span>
+func (b *BooleanLiteral) String() string       <span class="cov0" title="0">{ return b.Token.Literal }</span>
+
+// IntegerLiteral represents an integer literal.
+type IntegerLiteral struct {
+        Token token.Token
+        Value int64
+}
+
+func (il *IntegerLiteral) expressionNode()      {<span class="cov0" title="0">}</span>
+func (il *IntegerLiteral) TokenLiteral() string <span class="cov0" title="0">{ return il.Token.Literal }</span>
+func (il *IntegerLiteral) String() string       <span class="cov0" title="0">{ return il.Token.Literal }</span>
+
+// FloatLiteral represents a float literal.
+type FloatLiteral struct {
+        Token token.Token
+        Value float64
+}
+
+func (fl *FloatLiteral) expressionNode()      {<span class="cov0" title="0">}</span>
+func (fl *FloatLiteral) TokenLiteral() string <span class="cov0" title="0">{ return fl.Token.Literal }</span>
+func (fl *FloatLiteral) String() string       <span class="cov0" title="0">{ return fl.Token.Literal }</span>
+
+// StringLiteral represents a string literal.
+type StringLiteral struct {
+        Token token.Token
+        Value string
+}
+
+func (sl *StringLiteral) expressionNode()      {<span class="cov0" title="0">}</span>
+func (sl *StringLiteral) TokenLiteral() string <span class="cov0" title="0">{ return sl.Token.Literal }</span>
+func (sl *StringLiteral) String() string       <span class="cov8" title="1">{ return strconv.Quote(sl.Value) }</span>
+
+// ArrayLiteral represents an array literal.
+type ArrayLiteral struct {
+        Token    token.Token // the '[' token
+        Elements []Expression
+}
+
+func (al *ArrayLiteral) expressionNode()      {<span class="cov0" title="0">}</span>
+func (al *ArrayLiteral) TokenLiteral() string <span class="cov0" title="0">{ return al.Token.Literal }</span>
+func (al *ArrayLiteral) String() string <span class="cov0" title="0">{
+        var out bytes.Buffer
+        elements := []string{}
+        for _, el := range al.Elements </span><span class="cov0" title="0">{
+                elements = append(elements, el.String())
+        }</span>
+        <span class="cov0" title="0">out.WriteString("[")
+        out.WriteString(strings.Join(elements, ", "))
+        out.WriteString("]")
+        return out.String()</span>
+}
+
+// ObjectLiteral represents an object literal.
+type ObjectLiteral struct {
+        Token token.Token // the '{' token
+        Pairs []*KeyValueExpression
+}
+
+func (ol *ObjectLiteral) expressionNode()      {<span class="cov0" title="0">}</span>
+func (ol *ObjectLiteral) TokenLiteral() string <span class="cov0" title="0">{ return ol.Token.Literal }</span>
+func (ol *ObjectLiteral) String() string <span class="cov8" title="1">{
+        var out bytes.Buffer
+        pairs := []string{}
+        for _, p := range ol.Pairs </span><span class="cov8" title="1">{
+                pairs = append(pairs, p.String())
+        }</span>
+        <span class="cov8" title="1">out.WriteString("{")
+        out.WriteString(strings.Join(pairs, ", "))
+        out.WriteString("}")
+        return out.String()</span>
+}
+
+// Comment represents a # comment.
+type Comment struct {
+        Token token.Token
+        Value string
+}
+
+func (c *Comment) TokenLiteral() string <span class="cov0" title="0">{ return c.Token.Literal }</span>
+func (c *Comment) String() string       <span class="cov0" title="0">{ return c.Value }</span>
+
+// KeyValueExpression represents a key-value pair in an object literal.
+type KeyValueExpression struct {
+        Token          token.Token // The ':' token
+        Key            Expression
+        Value          Expression
+        HeadComments   []*Comment
+        LineComment    *Comment
+        FootComments   []*Comment
+        NewlinesBefore int // Used to track the number of newlines before the key-value pair
+}
+
+func (pe *KeyValueExpression) expressionNode()      {<span class="cov0" title="0">}</span>
+func (pe *KeyValueExpression) TokenLiteral() string <span class="cov0" title="0">{ return pe.Token.Literal }</span>
+func (pe *KeyValueExpression) String() string <span class="cov8" title="1">{
+        return pe.Key.String() + ":" + pe.Value.String()
+}</span>
+
+// NullLiteral represents a null literal.
+type NullLiteral struct {
+        Token token.Token
+}
+
+func (nl *NullLiteral) expressionNode()      {<span class="cov0" title="0">}</span>
+func (nl *NullLiteral) TokenLiteral() string <span class="cov0" title="0">{ return nl.Token.Literal }</span>
+func (nl *NullLiteral) String() string       <span class="cov0" title="0">{ return "null" }</span>
+</pre>
+		
+		<pre class="file" id="file6" style="display: none">package lexer
+
+import (
+        "bufio"
+        "bytes"
+        "fmt"
+        "io"
+        "unicode/utf8"
+
+        "github.com/KimNorgaard/go-maml/internal/token"
+)
+
+// Lexer holds the state for tokenizing MAML source.
+type Lexer struct {
+        r      *bufio.Reader
+        buf    bytes.Buffer
+        ch     rune
+        line   int
+        column int
+}
+
+// New creates and returns a new Lexer.
+func New(r io.Reader) *Lexer <span class="cov8" title="1">{
+        l := &amp;Lexer{r: bufio.NewReader(r), line: 1, column: 1}
+        l.readRune()
+        return l
+}</span>
+
+// NextToken scans the input and returns the next token.
+func (l *Lexer) NextToken() token.Token <span class="cov8" title="1">{ //nolint:gocognit
+        l.skipWhitespace()
+        tok := token.Token{Line: l.line, Column: l.column}
+        switch l.ch </span>{
+        case '{', '}', '[', ']', ',', ':':<span class="cov8" title="1">
+                tok.Type = token.Type(l.ch)
+                tok.Literal = string(l.ch)</span>
+        case '\r':<span class="cov8" title="1">
+                if l.peekRune() == '\n' </span><span class="cov8" title="1">{
+                        l.advance()
+                        tok.Type = token.NEWLINE
+                        tok.Literal = "\r\n"
+                }</span> else<span class="cov8" title="1"> {
+                        // Standalone CR is an illegal character per the spec.
+                        tok.Type = token.ILLEGAL
+                        tok.Literal = "\r"
+                }</span>
+        case '\n':<span class="cov8" title="1">
+                tok.Type = token.NEWLINE
+                tok.Literal = "\n"</span>
+        case '#':<span class="cov8" title="1">
+                lit, ok := l.readComment()
+                if !ok </span><span class="cov8" title="1">{
+                        tok.Type = token.ILLEGAL
+                }</span> else<span class="cov8" title="1"> {
+                        tok.Type = token.COMMENT
+                }</span>
+                <span class="cov8" title="1">tok.Literal = lit
+                return tok</span>
+        case '"':<span class="cov8" title="1">
+                lit, ok := l.readString()
+                if !ok </span><span class="cov8" title="1">{
+                        tok.Type = token.ILLEGAL
+                }</span> else<span class="cov8" title="1"> {
+                        tok.Type = token.STRING
+                }</span>
+                <span class="cov8" title="1">tok.Literal = lit
+                return tok</span>
+        case -1:<span class="cov8" title="1"> // Corresponds to io.EOF
+                tok.Type = token.EOF
+                tok.Literal = ""
+                return tok</span>
+        default:<span class="cov8" title="1">
+                if isDigit(l.ch) || (l.ch == '-' &amp;&amp; (isDigit(l.peekRune()) || l.peekRune() == '.')) </span><span class="cov8" title="1">{
+                        literal := l.readPotentialNumberOrIdentifier()
+                        if typ, ok := ParseAsNumber(literal); ok </span><span class="cov8" title="1">{
+                                tok.Type = typ
+                        }</span> else<span class="cov8" title="1"> {
+                                tok.Type = token.IDENT
+                        }</span>
+                        <span class="cov8" title="1">tok.Literal = literal
+                        return tok</span>
+                }
+                <span class="cov8" title="1">if isIdentifierChar(l.ch) </span><span class="cov8" title="1">{
+                        tok.Literal = l.readIdentifier()
+                        tok.Type = token.LookupIdent(tok.Literal)
+                        return tok
+                }</span>
+                <span class="cov8" title="1">tok.Type = token.ILLEGAL
+                if l.ch == utf8.RuneError </span><span class="cov8" title="1">{
+                        tok.Literal = "invalid utf-8"
+                }</span> else<span class="cov8" title="1"> {
+                        tok.Literal = string(l.ch)
+                }</span>
+        }
+        <span class="cov8" title="1">l.advance()
+        return tok</span>
+}
+
+func (l *Lexer) readRune() <span class="cov8" title="1">{
+        r, _, err := l.r.ReadRune()
+        if err != nil </span><span class="cov8" title="1">{
+                l.ch = -1
+                return
+        }</span>
+        <span class="cov8" title="1">l.ch = r</span>
+}
+
+func (l *Lexer) advance() <span class="cov8" title="1">{
+        if l.ch == '\n' </span><span class="cov8" title="1">{
+                l.line++
+                l.column = 0
+        }</span>
+        <span class="cov8" title="1">l.readRune()
+        l.column++</span>
+}
+
+func (l *Lexer) skipWhitespace() <span class="cov8" title="1">{
+        for l.ch == ' ' || l.ch == '\t' </span><span class="cov8" title="1">{
+                l.advance()
+        }</span>
+}
+
+func (l *Lexer) readComment() (string, bool) <span class="cov8" title="1">{
+        l.advance() // consume '#'
+        for l.ch == ' ' || l.ch == '\t' </span><span class="cov8" title="1">{
+                l.advance() // consume leading whitespace
+        }</span>
+        <span class="cov8" title="1">l.buf.Reset()
+        for l.ch != '\n' &amp;&amp; l.ch != -1 </span><span class="cov8" title="1">{
+                if isForbiddenControlChar(l.ch) </span><span class="cov8" title="1">{
+                        return fmt.Sprintf("forbidden control character U+%04X in comment", l.ch), false
+                }</span>
+                <span class="cov8" title="1">l.buf.WriteRune(l.ch)
+                l.advance()</span>
+        }
+        <span class="cov8" title="1">return l.buf.String(), true</span>
+}
+
+func (l *Lexer) readIdentifier() string <span class="cov8" title="1">{
+        l.buf.Reset()
+        for isIdentifierChar(l.ch) </span><span class="cov8" title="1">{
+                l.buf.WriteRune(l.ch)
+                l.advance()
+        }</span>
+        <span class="cov8" title="1">return l.buf.String()</span>
+}
+
+func (l *Lexer) readPotentialNumberOrIdentifier() string <span class="cov8" title="1">{
+        l.buf.Reset()
+        for isIdentifierChar(l.ch) || l.ch == '.' || l.ch == 'e' || l.ch == 'E' || l.ch == '+' </span><span class="cov8" title="1">{
+                l.buf.WriteRune(l.ch)
+                l.advance()
+        }</span>
+        <span class="cov8" title="1">return l.buf.String()</span>
+}
+
+func (l *Lexer) readString() (string, bool) <span class="cov8" title="1">{
+        if l.peekRune() == '"' &amp;&amp; l.peekNextRune() == '"' </span><span class="cov8" title="1">{
+                return l.readMultilineString()
+        }</span>
+        <span class="cov8" title="1">return l.readSingleLineString()</span>
+}
+
+func (l *Lexer) readEscapeSequence() (rune, bool, string) <span class="cov8" title="1">{
+        l.advance() // consume backslash
+        switch l.ch </span>{
+        case 'b', 'f', 'n', 'r', 't', '"', '\\', '/':<span class="cov8" title="1">
+                return unescape(l.ch), true, ""</span>
+        case 'u':<span class="cov8" title="1">
+                val, ok := l.readHex(4)
+                if !ok </span><span class="cov8" title="1">{
+                        return 0, false, "invalid unicode escape"
+                }</span>
+                <span class="cov8" title="1">if val &gt;= 0xD800 &amp;&amp; val &lt;= 0xDFFF </span><span class="cov8" title="1">{
+                        return 0, false, "invalid unicode scalar value (surrogate pair)"
+                }</span>
+                <span class="cov8" title="1">return val, true, ""</span>
+        default:<span class="cov8" title="1">
+                return 0, false, fmt.Sprintf("invalid escape sequence \\%c", l.ch)</span>
+        }
+}
+
+func (l *Lexer) readSingleLineString() (string, bool) <span class="cov8" title="1">{
+        l.advance() // consume opening quote
+        l.buf.Reset()
+        for </span><span class="cov8" title="1">{
+                if l.ch == '"' </span><span class="cov8" title="1">{
+                        l.advance() // consume closing quote
+                        return l.buf.String(), true
+                }</span>
+                <span class="cov8" title="1">if l.ch == '\n' || l.ch == -1 </span><span class="cov8" title="1">{
+                        return "unterminated string", false
+                }</span>
+
+                <span class="cov8" title="1">if l.ch == '\\' </span><span class="cov8" title="1">{
+                        r, ok, errMsg := l.readEscapeSequence()
+                        if !ok </span><span class="cov8" title="1">{
+                                return errMsg, false
+                        }</span>
+                        <span class="cov8" title="1">l.buf.WriteRune(r)</span>
+                } else<span class="cov8" title="1"> {
+                        if l.ch == utf8.RuneError </span><span class="cov8" title="1">{
+                                return "invalid utf-8 sequence in string", false
+                        }</span>
+                        <span class="cov8" title="1">if isForbiddenControlChar(l.ch) </span><span class="cov8" title="1">{
+                                return fmt.Sprintf("forbidden control character U+%04X in string", l.ch), false
+                        }</span>
+                        <span class="cov8" title="1">l.buf.WriteRune(l.ch)</span>
+                }
+                <span class="cov8" title="1">l.advance()</span>
+        }
+}
+
+func (l *Lexer) readMultilineString() (string, bool) <span class="cov8" title="1">{
+        l.advance() // consume first quote
+        l.advance() // consume second quote
+        l.advance() // consume third quote
+        if l.ch == '\n' </span><span class="cov8" title="1">{
+                l.advance()
+        }</span>
+        <span class="cov8" title="1">l.buf.Reset()
+        for </span><span class="cov8" title="1">{
+                if l.ch == -1 </span><span class="cov8" title="1">{
+                        return "unterminated multiline string", false
+                }</span>
+                <span class="cov8" title="1">if l.ch == '"' &amp;&amp; l.peekRune() == '"' &amp;&amp; l.peekNextRune() == '"' </span><span class="cov8" title="1">{
+                        l.advance()
+                        l.advance()
+                        l.advance()
+                        return l.buf.String(), true
+                }</span>
+                <span class="cov8" title="1">if l.ch == utf8.RuneError </span><span class="cov0" title="0">{
+                        return "invalid utf-8", false
+                }</span>
+                <span class="cov8" title="1">if l.ch != '\n' &amp;&amp; isForbiddenControlChar(l.ch) </span><span class="cov8" title="1">{
+                        return fmt.Sprintf("forbidden control character U+%04X in multiline string", l.ch), false
+                }</span>
+                <span class="cov8" title="1">l.buf.WriteRune(l.ch)
+                l.advance()</span>
+        }
+}
+
+func (l *Lexer) readHex(n int) (rune, bool) <span class="cov8" title="1">{
+        var val rune
+        for range n </span><span class="cov8" title="1">{
+                l.advance()
+                var d rune
+                switch </span>{
+                case '0' &lt;= l.ch &amp;&amp; l.ch &lt;= '9':<span class="cov8" title="1">
+                        d = l.ch - '0'</span>
+                case 'a' &lt;= l.ch &amp;&amp; l.ch &lt;= 'f':<span class="cov0" title="0">
+                        d = l.ch - 'a' + 10</span>
+                case 'A' &lt;= l.ch &amp;&amp; l.ch &lt;= 'F':<span class="cov8" title="1">
+                        d = l.ch - 'A' + 10</span>
+                default:<span class="cov8" title="1">
+                        return 0, false</span>
+                }
+                <span class="cov8" title="1">val = val*16 + d</span>
+        }
+        <span class="cov8" title="1">return val, true</span>
+}
+
+func (l *Lexer) peekRune() rune <span class="cov8" title="1">{
+        peekedBytes, _ := l.r.Peek(utf8.UTFMax)
+        if len(peekedBytes) == 0 </span><span class="cov8" title="1">{
+                return 0
+        }</span>
+        <span class="cov8" title="1">r, _ := utf8.DecodeRune(peekedBytes)
+        return r</span>
+}
+
+func (l *Lexer) peekNextRune() rune <span class="cov8" title="1">{
+        peekedBytes, _ := l.r.Peek(utf8.UTFMax * 2)
+        if len(peekedBytes) == 0 </span><span class="cov0" title="0">{
+                return 0
+        }</span>
+        <span class="cov8" title="1">_, firstRuneSize := utf8.DecodeRune(peekedBytes)
+        if len(peekedBytes) &lt;= firstRuneSize </span><span class="cov8" title="1">{
+                return 0
+        }</span>
+        <span class="cov8" title="1">r, _ := utf8.DecodeRune(peekedBytes[firstRuneSize:])
+        return r</span>
+}
+
+func isForbiddenControlChar(ch rune) bool <span class="cov8" title="1">{
+        return (ch &gt;= 0x00 &amp;&amp; ch &lt;= 0x08) || (ch &gt;= 0x0A &amp;&amp; ch &lt;= 0x1F) || ch == 0x7F
+}</span>
+
+func isDigit(ch rune) bool <span class="cov8" title="1">{
+        return '0' &lt;= ch &amp;&amp; ch &lt;= '9'
+}</span>
+
+func isIdentifierChar(ch rune) bool <span class="cov8" title="1">{
+        return ('a' &lt;= ch &amp;&amp; ch &lt;= 'z') || ('A' &lt;= ch &amp;&amp; ch &lt;= 'Z') || isDigit(ch) || ch == '_' || ch == '-'
+}</span>
+
+func unescape(ch rune) rune <span class="cov8" title="1">{
+        switch ch </span>{
+        case 'b':<span class="cov8" title="1">
+                return '\b'</span>
+        case 'f':<span class="cov8" title="1">
+                return '\f'</span>
+        case 'n':<span class="cov8" title="1">
+                return '\n'</span>
+        case 'r':<span class="cov8" title="1">
+                return '\r'</span>
+        case 't':<span class="cov8" title="1">
+                return '\t'</span>
+        case '"':<span class="cov8" title="1">
+                return '"'</span>
+        case '\\':<span class="cov8" title="1">
+                return '\\'</span>
+        case '/':<span class="cov8" title="1">
+                return '/'</span>
+        }
+        <span class="cov0" title="0">return 0</span>
+}
+
+func consumeDigits(s string, i int) int <span class="cov8" title="1">{
+        for i &lt; len(s) &amp;&amp; isDigit(rune(s[i])) </span><span class="cov8" title="1">{
+                i++
+        }</span>
+        <span class="cov8" title="1">return i</span>
+}
+
+func parseIntegerPart(s string, i int) (newIndex int, ok bool) <span class="cov8" title="1">{
+        integerStart := i
+        i = consumeDigits(s, i)
+        if i == integerStart </span><span class="cov0" title="0">{
+                return i, false // No digits found.
+        }</span>
+        <span class="cov8" title="1">integerPart := s[integerStart:i]
+        if len(integerPart) &gt; 1 &amp;&amp; integerPart[0] == '0' </span><span class="cov8" title="1">{
+                return i, false // Leading zeros are not allowed.
+        }</span>
+        <span class="cov8" title="1">return i, true</span>
+}
+
+func parseFractionalPart(s string, i int) (newIndex int, ok bool, isFloat bool) <span class="cov8" title="1">{
+        if i &gt;= len(s) || s[i] != '.' </span><span class="cov8" title="1">{
+                return i, true, false
+        }</span>
+        <span class="cov8" title="1">i++ // Consume '.'.
+        fractionStart := i
+        i = consumeDigits(s, i)
+        if i == fractionStart </span><span class="cov0" title="0">{
+                return i, false, true // No digits after '.'.
+        }</span>
+        <span class="cov8" title="1">return i, true, true</span>
+}
+
+func parseExponentPart(s string, i int) (newIndex int, ok bool, isFloat bool) <span class="cov8" title="1">{
+        if i &gt;= len(s) || (s[i] != 'e' &amp;&amp; s[i] != 'E') </span><span class="cov8" title="1">{
+                return i, true, false
+        }</span>
+        <span class="cov8" title="1">i++ // Consume 'e' or 'E'.
+        if i &lt; len(s) &amp;&amp; (s[i] == '+' || s[i] == '-') </span><span class="cov8" title="1">{
+                i++
+        }</span>
+        <span class="cov8" title="1">exponentStart := i
+        i = consumeDigits(s, i)
+        if i == exponentStart </span><span class="cov8" title="1">{
+                return i, false, true // No digits in exponent.
+        }</span>
+        <span class="cov8" title="1">return i, true, true</span>
+}
+
+func ParseAsNumber(s string) (token.Type, bool) <span class="cov8" title="1">{
+        if len(s) == 0 </span><span class="cov0" title="0">{
+                return token.ILLEGAL, false
+        }</span>
+        <span class="cov8" title="1">i, isFloat := 0, false
+
+        // Optional sign.
+        if s[i] == '-' </span><span class="cov8" title="1">{
+                if len(s) == 1 </span><span class="cov0" title="0">{
+                        return token.ILLEGAL, false
+                }</span>
+                <span class="cov8" title="1">i++</span>
+        }
+
+        // Integer part.
+        <span class="cov8" title="1">var ok bool
+        i, ok = parseIntegerPart(s, i)
+        if !ok </span><span class="cov8" title="1">{
+                return token.ILLEGAL, false
+        }</span>
+
+        // Fractional part.
+        <span class="cov8" title="1">var fracIsFloat bool
+        i, ok, fracIsFloat = parseFractionalPart(s, i)
+        if !ok </span><span class="cov0" title="0">{
+                return token.ILLEGAL, false
+        }</span>
+        <span class="cov8" title="1">if fracIsFloat </span><span class="cov8" title="1">{
+                isFloat = true
+        }</span>
+
+        // Exponent part.
+        <span class="cov8" title="1">var expIsFloat bool
+        i, ok, expIsFloat = parseExponentPart(s, i)
+        if !ok </span><span class="cov8" title="1">{
+                return token.ILLEGAL, false
+        }</span>
+        <span class="cov8" title="1">if expIsFloat </span><span class="cov8" title="1">{
+                isFloat = true
+        }</span>
+
+        // Must consume the whole string.
+        <span class="cov8" title="1">if i != len(s) </span><span class="cov8" title="1">{
+                return token.ILLEGAL, false
+        }</span>
+
+        <span class="cov8" title="1">if isFloat </span><span class="cov8" title="1">{
+                return token.FLOAT, true
+        }</span>
+        <span class="cov8" title="1">return token.INT, true</span>
+}
+</pre>
+		
+		<pre class="file" id="file7" style="display: none">package parser
+
+import (
+        "fmt"
+        "slices"
+        "strconv"
+
+        "github.com/KimNorgaard/go-maml/errors"
+        "github.com/KimNorgaard/go-maml/internal/ast"
+        "github.com/KimNorgaard/go-maml/internal/lexer"
+        "github.com/KimNorgaard/go-maml/internal/token"
+)
+
+type prefixParseFn func() ast.Expression
+
+// Option is a function that configures a Parser.
+type Option func(*Parser)
+
+// WithParseComments enables comment parsing.
+func WithParseComments() Option <span class="cov8" title="1">{
+        return func(p *Parser) </span><span class="cov8" title="1">{
+                p.parseComments = true
+        }</span>
+}
+
+// Parser holds the state of the parser.
+type Parser struct {
+        l      *lexer.Lexer
+        errors errors.ParseErrors
+
+        curToken  token.Token
+        peekToken token.Token
+
+        prefixParseFns map[token.Type]prefixParseFn
+
+        parseComments bool
+}
+
+// New creates a new parser.
+func New(l *lexer.Lexer, opts ...Option) *Parser <span class="cov8" title="1">{
+        p := &amp;Parser{
+                l:      l,
+                errors: errors.ParseErrors{},
+        }
+
+        for _, opt := range opts </span><span class="cov8" title="1">{
+                opt(p)
+        }</span>
+
+        <span class="cov8" title="1">p.prefixParseFns = make(map[token.Type]prefixParseFn)
+        p.registerPrefix(token.IDENT, p.parseIdentifier)
+        p.registerPrefix(token.INT, p.parseIntegerLiteral)
+        p.registerPrefix(token.FLOAT, p.parseFloatLiteral)
+        p.registerPrefix(token.STRING, p.parseStringLiteral)
+        p.registerPrefix(token.TRUE, p.parseBooleanLiteral)
+        p.registerPrefix(token.FALSE, p.parseBooleanLiteral)
+        p.registerPrefix(token.NULL, p.parseNullLiteral)
+        p.registerPrefix(token.LBRACK, p.parseArrayLiteral)
+        p.registerPrefix(token.LBRACE, p.parseObjectLiteral)
+        p.registerPrefix(token.ILLEGAL, p.parseIllegal)
+
+        // Read two tokens, so curToken and peekToken are both set.
+        p.nextToken()
+        p.nextToken()
+
+        return p</span>
+}
+
+// Errors returns a slice of error messages encountered during parsing.
+func (p *Parser) Errors() errors.ParseErrors <span class="cov8" title="1">{
+        return p.errors
+}</span>
+
+// Parse parses the MAML document and returns the root AST node.
+func (p *Parser) Parse() *ast.Document <span class="cov8" title="1">{
+        document := &amp;ast.Document{}
+        document.Statements = []ast.Statement{}
+
+        p.skip(token.NEWLINE)
+
+        // When parsing with comments, they can appear before the main value.
+        if p.parseComments </span><span class="cov8" title="1">{
+                document.HeadComments = p.consumeComments()
+                p.skip(token.NEWLINE)
+        }</span>
+
+        <span class="cov8" title="1">if p.curTokenIs(token.EOF) </span><span class="cov8" title="1">{
+                return document
+        }</span>
+
+        <span class="cov8" title="1">stmt := p.parseStatement()
+        if stmt != nil </span><span class="cov8" title="1">{
+                document.Statements = append(document.Statements, stmt)
+        }</span>
+
+        <span class="cov8" title="1">p.skip(token.NEWLINE)
+
+        if !p.curTokenIs(token.EOF) </span><span class="cov8" title="1">{
+                p.appendError(fmt.Sprintf("unexpected token after main value: %s ('%s')", p.curToken.Type, p.curToken.Literal))
+        }</span>
+
+        <span class="cov8" title="1">return document</span>
+}
+
+func (p *Parser) nextToken() <span class="cov8" title="1">{
+        p.curToken = p.peekToken
+        p.peekToken = p.l.NextToken()
+        if !p.parseComments </span><span class="cov8" title="1">{
+                for p.curTokenIs(token.COMMENT) </span><span class="cov8" title="1">{
+                        p.nextToken()
+                }</span>
+        }
+}
+
+// consumeComments consumes a block of comments, including the newlines between them.
+func (p *Parser) consumeComments() []*ast.Comment <span class="cov8" title="1">{
+        comments := []*ast.Comment{}
+        for </span><span class="cov8" title="1">{
+                if p.curTokenIs(token.COMMENT) </span><span class="cov8" title="1">{
+                        comment := &amp;ast.Comment{Token: p.curToken, Value: p.curToken.Literal}
+                        comments = append(comments, comment)
+                        p.nextToken() // consume comment token
+                }</span> else<span class="cov8" title="1"> if p.curTokenIs(token.NEWLINE) &amp;&amp; p.peekTokenIs(token.COMMENT) </span><span class="cov8" title="1">{
+                        // If the newline is followed by another comment, consume the newline and continue the loop.
+                        p.nextToken()
+                }</span> else<span class="cov8" title="1"> {
+                        break</span> // Not a comment or a newline followed by a comment, so the block is done.
+                }
+        }
+        <span class="cov8" title="1">return comments</span>
+}
+
+// consumeNewlines consumes one or more newline tokens and returns the count.
+func (p *Parser) consumeNewlines() int <span class="cov8" title="1">{
+        count := 0
+        for p.curTokenIs(token.NEWLINE) </span><span class="cov8" title="1">{
+                count++
+                p.nextToken()
+        }</span>
+        <span class="cov8" title="1">return count</span>
+}
+
+func (p *Parser) parseStatement() ast.Statement <span class="cov8" title="1">{
+        stmt := &amp;ast.ExpressionStatement{Token: p.curToken}
+        stmt.Expression = p.parseExpression()
+        return stmt
+}</span>
+
+func (p *Parser) parseExpression() ast.Expression <span class="cov8" title="1">{
+        prefix := p.prefixParseFns[p.curToken.Type]
+        if prefix == nil </span><span class="cov8" title="1">{
+                p.noPrefixParseFnError(p.curToken.Type)
+                return nil
+        }</span>
+        <span class="cov8" title="1">return prefix()</span>
+}
+
+// The contract for all parse functions is that they are entered with p.curToken
+// being the first token of the construct, and they must return with p.curToken
+// pointing to the token *after* the construct.
+
+func (p *Parser) parseIdentifier() ast.Expression <span class="cov8" title="1">{
+        // If the lexer gives us an IDENT that starts with a digit or a '-',
+        // it must be a malformed number, because a valid number would have
+        // been tokenized as INT or FLOAT. This applies to identifiers used as values.
+        lit := p.curToken.Literal
+        if len(lit) &gt; 0 </span><span class="cov8" title="1">{
+                firstChar := lit[0]
+                if (firstChar &gt;= '0' &amp;&amp; firstChar &lt;= '9') || firstChar == '-' </span><span class="cov8" title="1">{
+                        p.appendError(fmt.Sprintf("invalid number format: %s", lit))
+                        p.nextToken()
+                        return nil
+                }</span>
+        }
+
+        <span class="cov8" title="1">expr := &amp;ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+        p.nextToken()
+        return expr</span>
+}
+
+func (p *Parser) parseIntegerLiteral() ast.Expression <span class="cov8" title="1">{
+        lit := &amp;ast.IntegerLiteral{Token: p.curToken}
+        value, err := strconv.ParseInt(p.curToken.Literal, 10, 64)
+        if err != nil </span><span class="cov8" title="1">{
+                p.appendError(fmt.Sprintf("could not parse %q as integer: %s", p.curToken.Literal, err))
+                p.nextToken()
+                return nil
+        }</span>
+        <span class="cov8" title="1">lit.Value = value
+        p.nextToken()
+        return lit</span>
+}
+
+func (p *Parser) parseFloatLiteral() ast.Expression <span class="cov8" title="1">{
+        lit := &amp;ast.FloatLiteral{Token: p.curToken}
+        value, err := strconv.ParseFloat(p.curToken.Literal, 64)
+        if err != nil </span><span class="cov0" title="0">{
+                p.appendError(fmt.Sprintf("could not parse %q as float: %s", p.curToken.Literal, err))
+                p.nextToken()
+                return nil
+        }</span>
+        <span class="cov8" title="1">lit.Value = value
+        p.nextToken()
+        return lit</span>
+}
+
+func (p *Parser) parseStringLiteral() ast.Expression <span class="cov8" title="1">{
+        expr := &amp;ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
+        p.nextToken()
+        return expr
+}</span>
+
+func (p *Parser) parseBooleanLiteral() ast.Expression <span class="cov8" title="1">{
+        expr := &amp;ast.BooleanLiteral{Token: p.curToken, Value: p.curTokenIs(token.TRUE)}
+        p.nextToken()
+        return expr
+}</span>
+
+func (p *Parser) parseNullLiteral() ast.Expression <span class="cov8" title="1">{
+        expr := &amp;ast.NullLiteral{Token: p.curToken}
+        p.nextToken()
+        return expr
+}</span>
+
+func (p *Parser) parseIllegal() ast.Expression <span class="cov8" title="1">{
+        p.appendError(fmt.Sprintf("illegal token encountered: %s", p.curToken.Literal))
+        p.nextToken()
+        return nil
+}</span>
+
+func (p *Parser) parseArrayLiteral() ast.Expression <span class="cov8" title="1">{
+        array := &amp;ast.ArrayLiteral{Token: p.curToken}
+        p.nextToken() // Consume '['
+
+        array.Elements = p.parseExpressionList(token.RBRACK)
+
+        if !p.curTokenIs(token.RBRACK) </span><span class="cov8" title="1">{
+                p.appendError(fmt.Sprintf("unterminated array literal, expected ']' got %s", p.curToken.Type))
+                return nil
+        }</span>
+        <span class="cov8" title="1">p.nextToken() // Consume ']'
+        return array</span>
+}
+
+func (p *Parser) parseExpressionList(end token.Type) []ast.Expression <span class="cov8" title="1">{
+        list := []ast.Expression{}
+        p.skip(token.NEWLINE)
+        if p.curTokenIs(end) </span><span class="cov0" title="0">{
+                return list
+        }</span>
+
+        <span class="cov8" title="1">list = append(list, p.parseExpression())
+
+        for </span><span class="cov8" title="1">{
+                p.skip(token.NEWLINE, token.COMMA)
+                if p.curTokenIs(end) || p.curTokenIs(token.EOF) </span><span class="cov8" title="1">{
+                        break</span>
+                }
+                <span class="cov8" title="1">list = append(list, p.parseExpression())</span>
+        }
+        <span class="cov8" title="1">return list</span>
+}
+
+func (p *Parser) parseObjectLiteral() ast.Expression <span class="cov8" title="1">{
+        obj := &amp;ast.ObjectLiteral{Token: p.curToken, Pairs: []*ast.KeyValueExpression{}}
+        keys := make(map[string]bool)
+        p.nextToken() // Consume '{'
+
+        for !p.curTokenIs(token.RBRACE) &amp;&amp; !p.curTokenIs(token.EOF) </span><span class="cov8" title="1">{
+                newlines := p.consumeNewlines()
+                if p.curTokenIs(token.COMMA) </span><span class="cov8" title="1">{
+                        p.nextToken()
+                        newlines += p.consumeNewlines()
+                }</span>
+
+                <span class="cov8" title="1">if p.curTokenIs(token.RBRACE) </span><span class="cov8" title="1">{
+                        break</span>
+                }
+
+                <span class="cov8" title="1">var headComments []*ast.Comment
+                if p.parseComments </span><span class="cov8" title="1">{
+                        // A key-value pair can be preceded by multiple comment blocks,
+                        // separated by newlines. We need to consume all of them.
+                        for p.curTokenIs(token.COMMENT) </span><span class="cov8" title="1">{
+                                headComments = append(headComments, p.consumeComments()...)
+                                p.skip(token.NEWLINE)
+                        }</span>
+                }
+
+                <span class="cov8" title="1">if p.curTokenIs(token.RBRACE) </span><span class="cov0" title="0">{
+                        break</span>
+                }
+
+                <span class="cov8" title="1">pair := p.parseKeyValuePair(headComments, newlines)
+                if pair != nil </span><span class="cov8" title="1">{
+                        var keyStr string
+                        switch k := pair.Key.(type) </span>{
+                        case *ast.Identifier:<span class="cov8" title="1">
+                                keyStr = k.Value</span>
+                        case *ast.StringLiteral:<span class="cov8" title="1">
+                                keyStr = k.Value</span>
+                        }
+
+                        <span class="cov8" title="1">if keys[keyStr] </span><span class="cov8" title="1">{
+                                p.appendError(fmt.Sprintf("duplicate key in object: %s", keyStr))
+                        }</span>
+                        <span class="cov8" title="1">keys[keyStr] = true
+                        obj.Pairs = append(obj.Pairs, pair)
+                        // After parsing a pair, check for foot comments that might follow.
+                        if p.parseComments </span><span class="cov8" title="1">{
+                                // After parsing a pair, check for foot comments that might follow,
+                                // which may be preceded by an optional comma.
+                                if p.curTokenIs(token.COMMA) &amp;&amp; p.peekTokenIs(token.NEWLINE) </span><span class="cov0" title="0">{
+                                        p.nextToken() // consume comma
+                                }</span>
+                                // A foot comment must be on a new line.
+                                <span class="cov8" title="1">if p.curTokenIs(token.NEWLINE) &amp;&amp; p.peekTokenIs(token.COMMENT) </span><span class="cov8" title="1">{
+                                        p.nextToken() // consume newline
+                                        pair.FootComments = p.consumeComments()
+                                }</span>
+                        }
+                } else<span class="cov8" title="1"> {
+                        p.nextToken()
+                }</span>
+        }
+
+        <span class="cov8" title="1">if !p.curTokenIs(token.RBRACE) </span><span class="cov8" title="1">{
+                p.appendError(fmt.Sprintf("unterminated object literal, expected '}' got %s", p.curToken.Type))
+                return nil
+        }</span>
+        <span class="cov8" title="1">p.nextToken() // Consume '}'
+        return obj</span>
+}
+
+func (p *Parser) parseKeyValuePair(headComments []*ast.Comment, newlinesBefore int) *ast.KeyValueExpression <span class="cov8" title="1">{
+        key := p.parseObjectKey()
+        if key == nil </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+
+        <span class="cov8" title="1">if !p.curTokenIs(token.COLON) </span><span class="cov8" title="1">{
+                p.appendError(fmt.Sprintf("expected ':' after key, got %s", p.curToken.Type))
+                return nil
+        }</span>
+        <span class="cov8" title="1">p.nextToken() // Consume ':'
+        p.skip(token.NEWLINE)
+
+        value := p.parseExpression()
+        if value == nil </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+
+        <span class="cov8" title="1">kvp := &amp;ast.KeyValueExpression{Key: key, Value: value, HeadComments: headComments, NewlinesBefore: newlinesBefore}
+
+        if p.parseComments </span><span class="cov8" title="1">{
+                // A line comment must not be separated by a newline from the value.
+                // It can appear before or after an optional comma.
+                if p.curTokenIs(token.COMMENT) </span><span class="cov8" title="1">{
+                        // Case: `key: value # comment`
+                        kvp.LineComment = &amp;ast.Comment{Token: p.curToken, Value: p.curToken.Literal}
+                        p.nextToken() // consume comment
+                }</span> else<span class="cov8" title="1"> if p.curTokenIs(token.COMMA) &amp;&amp; p.peekTokenIs(token.COMMENT) </span><span class="cov8" title="1">{
+                        // Case: `key: value, # comment`. Here we consume the comma as well
+                        // as it is part of the "line" that the comment is on.
+                        p.nextToken() // consume comma
+                        kvp.LineComment = &amp;ast.Comment{Token: p.curToken, Value: p.curToken.Literal}
+                        p.nextToken() // consume comment
+                }</span>
+        }
+
+        <span class="cov8" title="1">return kvp</span>
+}
+
+func (p *Parser) parseObjectKey() ast.Expression <span class="cov8" title="1">{
+        var key ast.Expression
+        switch p.curToken.Type </span>{
+        case token.STRING:<span class="cov8" title="1">
+                key = &amp;ast.StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
+                p.nextToken()</span>
+        case token.IDENT, token.INT:<span class="cov8" title="1">
+                // Per spec, numeric keys are treated as identifiers. No special validation needed here.
+                key = &amp;ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
+                p.nextToken()</span>
+        default:<span class="cov8" title="1">
+                p.appendError(fmt.Sprintf("invalid token for object key: %s ('%s')", p.curToken.Type, p.curToken.Literal))
+                p.nextToken()
+                return nil</span>
+        }
+        <span class="cov8" title="1">return key</span>
+}
+
+func (p *Parser) skip(types ...token.Type) <span class="cov8" title="1">{
+        for </span><span class="cov8" title="1">{
+                if found := slices.ContainsFunc(types, func(t token.Type) bool </span><span class="cov8" title="1">{
+                        return p.curTokenIs(t)
+                }</span>); !found <span class="cov8" title="1">{
+                        break</span>
+                }
+                <span class="cov8" title="1">p.nextToken()</span>
+        }
+}
+
+func (p *Parser) registerPrefix(tokenType token.Type, fn prefixParseFn) <span class="cov8" title="1">{
+        p.prefixParseFns[tokenType] = fn
+}</span>
+
+func (p *Parser) noPrefixParseFnError(t token.Type) <span class="cov8" title="1">{
+        msg := fmt.Sprintf("no prefix parse function for %s ('%s') found", t, p.curToken.Literal)
+        p.appendError(msg)
+}</span>
+
+func (p *Parser) appendError(msg string) <span class="cov8" title="1">{
+        p.errors = append(p.errors, errors.ParseError{Message: msg, Line: p.curToken.Line, Column: p.curToken.Column})
+}</span>
+
+func (p *Parser) curTokenIs(t token.Type) bool <span class="cov8" title="1">{
+        return p.curToken.Type == t
+}</span>
+
+func (p *Parser) peekTokenIs(t token.Type) bool <span class="cov8" title="1">{
+        return p.peekToken.Type == t
+}</span>
+</pre>
+		
+		<pre class="file" id="file8" style="display: none">package testutil
+
+import (
+        "embed"
+        "fmt"
+        "io/fs"
+)
+
+// TestdataFS holds the embedded test data files.
+//
+//go:embed testdata
+var TestdataFS embed.FS
+
+// ReadTestData reads and returns the content of an embedded test file.
+func ReadTestData(name string) ([]byte, error) <span class="cov0" title="0">{
+        path := fmt.Sprintf("testdata/%s", name)
+        data, err := fs.ReadFile(TestdataFS, path)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to read test data file '%s': %w", name, err)
+        }</span>
+        <span class="cov0" title="0">return data, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file9" style="display: none">package token
+
+// Type is the type of a token.
+type Type string
+
+// Token represents a lexical token.
+type Token struct {
+        Type    Type
+        Literal string
+        Line    int
+        Column  int
+}
+
+const (
+        // Special tokens
+        ILLEGAL Type = "ILLEGAL" // An unknown or invalid token
+        EOF     Type = "EOF"     // End of file
+
+        // Literals
+        IDENT  Type = "IDENT"  // a, key, name
+        INT    Type = "INT"    // 12345
+        FLOAT  Type = "FLOAT"  // 123.45
+        STRING Type = "STRING" // "hello world"
+
+        // Delimiters
+        LBRACE Type = "{"
+        RBRACE Type = "}"
+        LBRACK Type = "["
+        RBRACK Type = "]"
+        COMMA  Type = ","
+        COLON  Type = ":"
+
+        // Keywords
+        TRUE  Type = "TRUE"
+        FALSE Type = "FALSE"
+        NULL  Type = "NULL"
+
+        // Comments and Whitespace
+        COMMENT Type = "COMMENT" // # a comment
+        NEWLINE Type = "NEWLINE" // \n
+)
+
+var keywords = map[string]Type{
+        "true":  TRUE,
+        "false": FALSE,
+        "null":  NULL,
+}
+
+// LookupIdent checks the keywords table for an identifier.
+// If the identifier is a keyword, it returns the keyword's token type.
+// Otherwise, it returns IDENT.
+func LookupIdent(ident string) Type <span class="cov8" title="1">{
+        if tok, ok := keywords[ident]; ok </span><span class="cov8" title="1">{
+                return tok
+        }</span>
+        <span class="cov8" title="1">return IDENT</span>
+}
+</pre>
+		
+		<pre class="file" id="file10" style="display: none">package maml
+
+import (
+        "bytes"
+
+        "github.com/KimNorgaard/go-maml/internal/ast"
+        "github.com/KimNorgaard/go-maml/internal/lexer"
+        "github.com/KimNorgaard/go-maml/internal/parser"
+)
+
+// Marshaler is the interface implemented by types that can marshal themselves
+// into valid MAML.
+type Marshaler interface {
+        // MarshalMAML returns the MAML encoding of the value.
+        MarshalMAML() ([]byte, error)
+}
+
+// Unmarshaler is the interface implemented by types that can unmarshal
+// a MAML description of themselves. The input can be assumed to be a
+// valid MAML value. UnmarshalMAML must copy the MAML data if it wishes
+// to retain the data after returning.
+type Unmarshaler interface {
+        // UnmarshalMAML unmarshals the MAML-encoded data and stores the result
+        // in the value pointed to by the receiver.
+        UnmarshalMAML([]byte) error
+}
+
+// Marshal returns the MAML encoding of in.
+//
+// Marshal functions similarly to encoding/json.Marshal, traversing the value in
+// recursively. If an encountered value implements the Marshaler interface,
+// Marshal calls its MarshalMAML method to produce MAML.
+//
+// The mapping between Go values and MAML values is analogous to encoding/json:
+//
+// Boolean values encode as MAML booleans.
+//
+// Floating point, integer, and uint values encode as MAML numbers.
+//
+// String values encode as MAML strings.
+//
+// Slices and arrays encode as MAML arrays.
+//
+// Struct values encode as MAML objects. Exported fields are used as object keys.
+// The `maml` struct tag can be used to customize key names and behavior,
+// e.g., `maml:"my_key,omitempty"`.
+//
+// Maps encode as MAML objects. The map's key type must be a string.
+//
+// Pointers are dereferenced and their values are encoded. A nil pointer
+// encodes as the MAML null value.
+func Marshal(in any, opts ...Option) (out []byte, err error) <span class="cov8" title="1">{
+        var buf bytes.Buffer
+        e := NewEncoder(&amp;buf, opts...)
+        if err := e.Encode(in); err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">return buf.Bytes(), nil</span>
+}
+
+// Unmarshal parses the MAML-encoded data and stores the result in the value
+// pointed to by out. If out is nil or not a pointer, Unmarshal returns an
+// error.
+//
+// Unmarshal uses a similar mapping from MAML to Go values as encoding/json.Unmarshal,
+// and it will use the inverse of the rules described in Marshal. It supports
+// `maml` struct tags for custom field mapping and honors the Unmarshaler and
+// encoding.TextUnmarshaler interfaces.
+//
+// If the MAML data contains syntax errors, Unmarshal will return a ParseErrors
+// value containing detailed information about each error.
+func Unmarshal(in []byte, out any, opts ...Option) error <span class="cov8" title="1">{
+        dec := NewDecoder(bytes.NewReader(in), opts...)
+        return dec.Decode(out)
+}</span>
+
+// Parse parses the MAML-encoded data and returns the root AST node.
+// This function is intended for use cases where the MAML document needs
+// to be programmatically inspected or manipulated while preserving full
+// fidelity, including comments and spacing.
+//
+// The returned ast.Node can then be passed to Marshal to produce formatted
+// MAML output.
+func Parse(in []byte) (*ast.Document, error) <span class="cov8" title="1">{
+        l := lexer.New(bytes.NewReader(in))
+        // Always parse with comments, as that's the primary use case for this function.
+        p := parser.New(l, parser.WithParseComments())
+        doc := p.Parse()
+        if len(p.Errors()) &gt; 0 </span><span class="cov8" title="1">{
+                return nil, p.Errors()
+        }</span>
+        <span class="cov8" title="1">return doc, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file11" style="display: none">package maml
+
+import "fmt"
+
+// options provides configuration for marshaling and unmarshaling.
+type options struct {
+        // maxDepth specifies the maximum depth to descend when decoding into
+        // a Go value. If not set, a default depth limit is used.
+        maxDepth int
+
+        // indent specifies the number of spaces for indentation.
+        // A nil value means the default indentation is used.
+        // A value of 0 means compact output.
+        indent *int
+
+        // disallowUnknownFields specifies whether the decoder should
+        // return an error when encountering unknown fields in the MAML document.
+        disallowUnknownFields bool
+
+        // inlineArrays specifies whether the encoder should format arrays on a
+        // single line.
+        inlineArrays bool
+
+        // inlineStrings specifies whether the encoder should inline strings in the
+        // output.
+        inlineStrings bool
+
+        // useFieldCommas specifies whether the encoder should
+        // separate object pairs and array elements with a comma.
+        useFieldCommas bool
+
+        // useTrailingCommas specifies whether the encoder should
+        // output a comma after the last element in arrays and objects
+        // when pretty-printing. This option only takes effect if
+        // UseFieldCommas is also enabled.
+        useTrailingCommas bool
+
+        // parseComments specifies whether the parser should parse and include
+        // comments in the AST. This is used for comment-preserving round-trips.
+        parseComments bool
+}
+
+// Option is a functional option for configuring an Encoder or Decoder.
+type Option func(*options) error
+
+// MaxDepth returns an Option that sets the maximum recursion depth
+// for the decoder. This helps prevent stack overflows when unmarshaling
+// highly nested MAML documents.
+//
+// The depth n must be a positive integer.
+func MaxDepth(n int) Option <span class="cov8" title="1">{
+        return func(o *options) error </span><span class="cov8" title="1">{
+                if n &lt;= 0 </span><span class="cov8" title="1">{
+                        return fmt.Errorf("maml: max depth must be a positive integer")
+                }</span>
+                <span class="cov8" title="1">o.maxDepth = n
+                return nil</span>
+        }
+}
+
+// DisallowUnknownFields returns an Option that causes the decoder to
+// return an error when encountering unknown fields in the MAML document.
+func DisallowUnknownFields() Option <span class="cov8" title="1">{
+        return func(o *options) error </span><span class="cov8" title="1">{
+                o.disallowUnknownFields = true
+                return nil
+        }</span>
+}
+
+// Indent returns an Option that sets the indentation for the encoder.
+// It specifies the number of spaces to use for each level of indentation.
+//
+// If n is 0, the output will be compact with no newlines or indentation.
+// The number of spaces must not be negative.
+func Indent(n int) Option <span class="cov8" title="1">{
+        return func(o *options) error </span><span class="cov8" title="1">{
+                if n &lt; 0 </span><span class="cov8" title="1">{
+                        return fmt.Errorf("maml: indent spaces cannot be negative")
+                }</span>
+                <span class="cov8" title="1">o.indent = &amp;n
+                return nil</span>
+        }
+}
+
+// InlineArrays returns an Option that causes the encoder to
+// inline arrays in the output.
+func InlineArrays() Option <span class="cov8" title="1">{
+        return func(o *options) error </span><span class="cov8" title="1">{
+                o.inlineArrays = true
+                return nil
+        }</span>
+}
+
+// InlineStrings returns an Option that causes the encoder to
+// inline strings in the output.
+func InlineStrings() Option <span class="cov8" title="1">{
+        return func(o *options) error </span><span class="cov8" title="1">{
+                o.inlineStrings = true
+                return nil
+        }</span>
+}
+
+// UseFieldCommas returns an Option that causes the encoder to
+// separate objects and object paris with a comma.
+//
+// This has no effect on inlined arrays. It only affects end of line
+// separators (commas).
+func UseFieldCommas() Option <span class="cov8" title="1">{
+        return func(o *options) error </span><span class="cov8" title="1">{
+                o.useFieldCommas = true
+                return nil
+        }</span>
+}
+
+// UseTrailingCommas returns an Option that causes the encoder to
+// output a comma after the last element in arrays and objects
+// when pretty-printing. This option only takes effect if
+// UseFieldCommas is also enabled.
+func UseTrailingCommas() Option <span class="cov8" title="1">{
+        return func(o *options) error </span><span class="cov8" title="1">{
+                o.useTrailingCommas = true
+                return nil
+        }</span>
+}
+
+// ParseComments returns an Option that enables the parsing of comments.
+// When this option is used with Unmarshal and the destination is an
+// *ast.Document, the resulting AST will contain all comments from the source.
+func ParseComments() Option <span class="cov8" title="1">{
+        return func(o *options) error </span><span class="cov8" title="1">{
+                o.parseComments = true
+                return nil
+        }</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

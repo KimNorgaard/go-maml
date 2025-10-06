@@ -59,6 +59,12 @@ func (f *formatter) writeIndent() error {
 func (f *formatter) writeNode(node ast.Node) error {
 	switch n := node.(type) {
 	case *ast.Document:
+		for _, comment := range n.HeadComments {
+			if err := f.write("# " + comment.Value + "\n"); err != nil {
+				return err
+			}
+		}
+
 		for i, stmt := range n.Statements {
 			if err := f.writeNode(stmt); err != nil {
 				return err
@@ -106,9 +112,31 @@ func (f *formatter) writeMultilineString(s string) error {
 func (f *formatter) writePrettyObject(obj *ast.ObjectLiteral) error { //nolint:gocognit
 	f.depth++
 	for i, pair := range obj.Pairs {
-		if err := f.write("\n"); err != nil {
-			return err
+		// Use the recorded number of newlines from the source to preserve vertical spacing.
+		numNewlines := pair.NewlinesBefore
+		if i == 0 {
+			// First pair is always one newline after '{'.
+			numNewlines = 1
+		} else if numNewlines == 0 {
+			// Subsequent pairs need at least one newline for pretty printing.
+			numNewlines = 1
 		}
+
+		for j := 0; j < numNewlines; j++ {
+			if err := f.write("\n"); err != nil {
+				return err
+			}
+		}
+
+		for _, comment := range pair.HeadComments {
+			if err := f.writeIndent(); err != nil {
+				return err
+			}
+			if err := f.write("# " + comment.Value + "\n"); err != nil {
+				return err
+			}
+		}
+
 		if err := f.writeIndent(); err != nil {
 			return err
 		}
@@ -118,6 +146,7 @@ func (f *formatter) writePrettyObject(obj *ast.ObjectLiteral) error { //nolint:g
 		if err := f.writeNode(pair.Value); err != nil {
 			return err
 		}
+
 		if f.opts.useFieldCommas {
 			if i < len(obj.Pairs)-1 {
 				if err := f.write(","); err != nil {
@@ -129,10 +158,30 @@ func (f *formatter) writePrettyObject(obj *ast.ObjectLiteral) error { //nolint:g
 				}
 			}
 		}
+
+		if pair.LineComment != nil {
+			if err := f.write(" # " + pair.LineComment.Value); err != nil {
+				return err
+			}
+		}
+
+		for _, comment := range pair.FootComments {
+			if err := f.write("\n"); err != nil {
+				return err
+			}
+			if err := f.writeIndent(); err != nil {
+				return err
+			}
+			if err := f.write("# " + comment.Value); err != nil {
+				return err
+			}
+		}
 	}
 	f.depth--
-	if err := f.write("\n"); err != nil {
-		return err
+	if len(obj.Pairs) > 0 {
+		if err := f.write("\n"); err != nil {
+			return err
+		}
 	}
 	return f.writeIndent()
 }
